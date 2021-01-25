@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="odim-belda", # Replace with your own username
+    name="odim", # Replace with your own username
     version="0.1.1",
     author="Belda",
     author_email="jakub.belescak@centrum.cz",
@@ -20,6 +20,6 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires = [
-        pydantic
+        "pydantic"
     ]
 )
