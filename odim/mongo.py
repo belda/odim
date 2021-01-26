@@ -10,7 +10,7 @@ import inspect
 from pymongo import ASCENDING, DESCENDING
 
 import settings
-from odim import Odim, Operation, SearchParams
+from odim import Odim, Operation, SearchParams, all_json_encoders
 from odim.helper import get_connection_info
 
 log = logging.getLogger("uvicorn")
@@ -68,6 +68,8 @@ class BaseMongoModel(BaseModel):
       datetime: lambda dt: dt.isoformat()
     }
 
+all_json_encoders.update( BaseMongoModel.Config.json_encoders)
+
 
 class OdimMongo(Odim):
   protocols = ["mongo","mongodb"]
@@ -99,8 +101,12 @@ class OdimMongo(Odim):
     ''' Saves only the changed fields leaving other fields alone '''
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
-    dd = self.instance.dict(exclude_unset=True)
+    dd = self.instance.dict(exclude_unset=True, by_alias=True)
+    if "_id" not in dd:
+      raise AttributeError("Can not update document without _id")
     dd_id = dd["_id"]
+    if isinstance(dd_id, str):
+      dd_id = ObjectId(dd_id)
     del dd["_id"]
     ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id}, {"$set" : dd})
 

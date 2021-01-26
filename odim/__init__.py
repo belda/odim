@@ -6,8 +6,12 @@ from typing import List, Optional, TypeVar, Union, Generic
 
 from pydantic import BaseModel, Field
 from pydantic.generics import GenericModel
-
+from datetime import datetime
 from odim.helper import get_config, get_connection_info, get_connector_for_model
+
+all_json_encoders = {
+  datetime: lambda dt: dt.isoformat()
+}
 
 T = TypeVar('T')
 
@@ -22,6 +26,9 @@ class SearchResponse(GenericModel, Generic[T]):
   search : dict = Field(description="The search data that was performed")
   total : int =  Field(description="The total number of results")
   results : List[T]
+
+  class Config:
+    json_encoders = all_json_encoders
 
 
 class Operation(Enum):

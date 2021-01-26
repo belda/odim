@@ -1,9 +1,12 @@
 import inspect
 import json
-from typing import Type, Union
-
-from pydantic import BaseModel
-
+import sys
+from os import path, getcwd
+from typing import Optional, Type, Union
+from pydantic import BaseModel, create_model
+from odim.mongo import BaseMongoModel, ObjectId
+from datetime import datetime
+from odim import dynmodels
 
 def get_class_by_name(classname):
   ''' Returns the loaded instance of a class '''
@@ -22,9 +25,94 @@ MM_TYPE_MAPPING = {
   "ObjectId" : "ObjectId"}
 
 
+DM_TYPE_MAPPING = {
+  "String" : str,
+  "Number" : float,
+  "Boolean" : bool,
+  "Array" : list,
+  "Date" : datetime,
+  "ObjectId" : ObjectId,
+  "Parent": dict
+}
+
+
+def encode(k, v, cls):
+  if isinstance(v, dict):
+    if v.get("type") == "Number" and v.get("integer"):
+      dt = 'int'
+    else:
+      dt = MM_TYPE_MAPPING.get(v.get("type"), str)
+
+    if v.get("required", False) or v.get("default", True) in ('', False, None):
+      cls[k] = (Optional[dt], v.get("default", None))
+    else:
+      cls[k] = (dt, v.get("default", None))
+  else:
+    cls[k] = (Optional[MM_TYPE_MAPPING.get(v, str)], None)
+
 
 class ModelFactory(object):
   ''' Utility  for  generating stub code for Pydantic models based on their JSON definition and vice-versa'''
+
+  @classmethod
+  def load_mongo_model(cls, class_name=None,
+                       description=None,
+                       db_name=None, db_uri=None,
+                       database=None, collection_name=None,
+                       file_uri=None, signal_file=None) -> Type[BaseMongoModel]:
+
+    assert db_name or db_uri, "Either database_name or database_uri must be specified"
+    assert database and collection_name, "database and collection_name must be set"
+    tryfiles = []
+    if not file_uri:
+      file_uri = "schemas/src/"+database+"/"+collection_name.lower() +".json"
+    tryfiles.append(file_uri)
+    tryfiles.append(path.join(getcwd(), file_uri))
+    tryfiles.append(path.join(getcwd(), "models", file_uri))
+    tryfiles.append(path.join(path.dirname(path.realpath(__file__)), file_uri))
+    #TODO signals
+
+    file = None
+    for f in tryfiles:
+      if path.exists(f):
+        file = f
+        break
+    assert file, "No schema json was found. tried %s" % tryfiles
+
+    with open(file, "r") as f:
+      data = json.loads(f.read())
+      cls = {}
+      for k,v in data.items():
+        if k in ("__class_name","__title"):
+          if not class_name:
+            class_name = v
+        elif k in ("__description"):
+          if not description:
+            description = v
+        else:
+          if isinstance(v, list):
+            encode(k, v[0], cls)
+          else:
+            encode(k, v, cls)
+
+      if not class_name:
+        class_name = collection_name
+      m = create_model(class_name,
+                       __module__ = "odim.dynmodels",
+                       __base__=BaseMongoModel,
+                       **cls)
+      meta_attrs = {"collection_name": collection_name,
+          **vars(BaseMongoModel.Config)
+      }
+      if db_name:
+        meta_attrs["db_name"] = db_name
+      if db_uri:
+        meta_attrs["db_uri"] = db_uri
+      setattr(m, 'Config', type('class', (), meta_attrs))
+      m.__doc__ = description
+      m.update_forward_refs()
+      return m
+
 
   @classmethod
   def model_to_json(cls, model : Union[str, BaseModel, BaseModel.__class__]):
@@ -85,6 +173,8 @@ class ModelFactory(object):
         if "description" in v:
           rest+= f" = Field(description='{v['description']}')"
         print(f"  {k} : {dt} {rest}")
+
+
 
 
 if __name__ == "__main__":
