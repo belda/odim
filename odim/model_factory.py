@@ -1,8 +1,10 @@
 import inspect
 import json
+import random
+import string
 import sys
 from os import path, getcwd
-from typing import Optional, Type, Union
+from typing import Any, List, Optional, Type, Union
 from pydantic import BaseModel, create_model
 from odim.mongo import BaseMongoModel, ObjectId
 from datetime import datetime
@@ -36,19 +38,37 @@ DM_TYPE_MAPPING = {
 }
 
 
-def encode(k, v, cls):
-  if isinstance(v, dict):
-    if v.get("type") == "Number" and v.get("integer"):
-      dt = 'int'
+def encode(k, v):
+  if isinstance(v, list):
+    if len(v) == 0:
+      return List[Any], None
     else:
-      dt = MM_TYPE_MAPPING.get(v.get("type"), str)
+      enc = encode("sub", v[0])
+      return List[enc[0]], enc[1]
 
-    if v.get("required", False) or v.get("default", True) in ('', False, None):
-      cls[k] = (Optional[dt], v.get("default", None))
-    else:
-      cls[k] = (dt, v.get("default", None))
+  elif isinstance(v, dict):
+      if v.get("type") == "Parent":
+        subcls = {}
+        for ks,vs in v.get("child", {}).items():
+          subcls[ks] = encode(ks, vs)
+        m = create_model(__model_name=v.get("__title", "subdocument"+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))),
+                         __module__ = "odim.dynmodels",
+                         __base__=BaseModel,
+                         **subcls)
+        if "__description" in v:
+          m.__doc__ = v.get("__description")
+        dt = m
+      elif v.get("type") == "Number" and v.get("integer"):
+        dt = int
+      else:
+        dt = DM_TYPE_MAPPING.get(v.get("type"), str)
+
+      if v.get("required", False) or v.get("default", True) in ('', False, None):
+        return Optional[dt], v.get("default", None)
+      else:
+        return dt, v.get("default", None)
   else:
-    cls[k] = (Optional[MM_TYPE_MAPPING.get(v, str)], None)
+    return Optional[DM_TYPE_MAPPING.get(v, str)], None
 
 
 class ModelFactory(object):
@@ -90,10 +110,7 @@ class ModelFactory(object):
           if not description:
             description = v
         else:
-          if isinstance(v, list):
-            encode(k, v[0], cls)
-          else:
-            encode(k, v, cls)
+          cls[k] = encode(k, v)
 
       if not class_name:
         class_name = collection_name
@@ -101,9 +118,7 @@ class ModelFactory(object):
                        __module__ = "odim.dynmodels",
                        __base__=BaseMongoModel,
                        **cls)
-      meta_attrs = {"collection_name": collection_name,
-          **vars(BaseMongoModel.Config)
-      }
+      meta_attrs = {"collection_name": collection_name, **vars(BaseMongoModel.Config)}
       if db_name:
         meta_attrs["db_name"] = db_name
       if db_uri:
