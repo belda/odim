@@ -48,6 +48,11 @@ def parse_fieldop(field):
   return field, Operation.exact
 
 
+class BaseOdimModel(BaseModel):
+  pass
+
+
+
 class Odim(object):
   ''' Initiates the wrapper to communicate with backends based on the pydantic model Config metaclass '''
   protocols = []
@@ -79,6 +84,20 @@ class Odim(object):
         return key
     raise AttributeError("missing database definition")
 
+
+  def execute_hooks(self, hook_type, obj):
+    if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks"):
+      for fnc in self.model.Config.odim_hooks.get(hook_type,[]):
+        obj = fnc(obj)
+    return obj
+
+
+  def has_hooks(self, *hook_types):
+    ''' Whether there are hooks '''
+    for hk in hook_types:
+      if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks") and len(self.model.Config.odim_hooks.get(hk, []))>0:
+        return True
+    return False
 
 
   async def save(self):

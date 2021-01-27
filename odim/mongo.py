@@ -93,7 +93,10 @@ class OdimMongo(Odim):
     if not self.instance.id:
       self.instance.id = BsonObjectId()
     collection = self.get_collection_name()
-    ret = await mongo_client[collection].insert_one(self.instance.dict(by_alias=True))
+    iii = self.execute_hooks("pre_save", self.instance)
+    dd = iii.dict(by_alias=True)
+    ret = await mongo_client[collection].insert_one(dd)
+    dd = self.execute_hooks("post_save", dd)
     return ret.inserted_id
 
 
@@ -101,7 +104,8 @@ class OdimMongo(Odim):
     ''' Saves only the changed fields leaving other fields alone '''
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
-    dd = self.instance.dict(exclude_unset=True, by_alias=True)
+    iii = self.execute_hooks("pre_save", self.instance)
+    dd = iii.dict(exclude_unset=True, by_alias=True)
     if "_id" not in dd:
       raise AttributeError("Can not update document without _id")
     dd_id = dd["_id"]
@@ -109,6 +113,8 @@ class OdimMongo(Odim):
       dd_id = ObjectId(dd_id)
     del dd["_id"]
     ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id}, {"$set" : dd})
+    dd = self.execute_hooks("post_save", dd)
+    return ret
 
 
   async def get(self, id : Union[str, ObjectId], **kwargs):
@@ -117,7 +123,10 @@ class OdimMongo(Odim):
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
     ret = await mongo_client[collection].find_one({"_id" : id})
-    return self.model(**ret)
+    ret = self.execute_hooks("pre_init", ret)
+    x = self.model(**ret)
+    return self.execute_hooks("post_init", x)
+
 
   def get_parsed_query(self, query):
     rsp = {}
@@ -162,8 +171,12 @@ class OdimMongo(Odim):
             find_params["sort"].append( (so, ASCENDING) )
     query = self.get_parsed_query(query)
     curs = mongo_client[collection].find(query, **find_params)
-    ret = await curs.to_list(None)
-    return [self.model(**x) for x in ret ]
+    rsplist = []
+    for x in await curs.to_list(None):
+      m = self.model( **self.execute_hooks("pre_init", x) )
+      rsplist.append( self.execute_hooks("post_init", m) )
+    return rsplist
+
 
 
   async def count(self, query : dict):
@@ -181,4 +194,12 @@ class OdimMongo(Odim):
       d = {"_id" : obj}
     else:
       d = obj.dict()
-    return await mongo_client[collection].delete_one(d)
+    if self.has_hooks("pre_remove","post_remove"):
+      ret = await mongo_client[collection].find_one(d)
+      ret = self.execute_hooks("pre_init", ret)
+      x = self.model(**ret)
+      x = self.execute_hooks("post_init", x)
+      x = self.execute_hooks("pre_remove", x)
+    rsp = await mongo_client[collection].delete_one(d)
+    if self.has_hooks("pre_remove","post_remove"):
+      self.execute_hooks("post_remove", x)

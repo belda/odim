@@ -2,6 +2,7 @@ import inspect
 import json
 import random
 import string
+import importlib
 import sys
 from os import path, getcwd
 from typing import Any, List, Optional, Type, Union
@@ -71,6 +72,17 @@ def encode(k, v):
     return Optional[DM_TYPE_MAPPING.get(v, str)], None
 
 
+def location_tester(file_uri):
+  tryfiles = [file_uri,
+              path.join(getcwd(), file_uri),
+              path.join(getcwd(), "models", file_uri),
+              path.join(path.dirname(path.realpath(__file__)), file_uri)]
+  for f in tryfiles:
+    if path.exists(f):
+      return f
+
+
+
 class ModelFactory(object):
   ''' Utility  for  generating stub code for Pydantic models based on their JSON definition and vice-versa'''
 
@@ -83,21 +95,14 @@ class ModelFactory(object):
 
     assert db_name or db_uri, "Either database_name or database_uri must be specified"
     assert database and collection_name, "database and collection_name must be set"
-    tryfiles = []
     if not file_uri:
       file_uri = "schemas/src/"+database+"/"+collection_name.lower() +".json"
-    tryfiles.append(file_uri)
-    tryfiles.append(path.join(getcwd(), file_uri))
-    tryfiles.append(path.join(getcwd(), "models", file_uri))
-    tryfiles.append(path.join(path.dirname(path.realpath(__file__)), file_uri))
-    #TODO signals
+    file = location_tester(file_uri)
+    assert file, "No schema json was found."
 
-    file = None
-    for f in tryfiles:
-      if path.exists(f):
-        file = f
-        break
-    assert file, "No schema json was found. tried %s" % tryfiles
+    if not signal_file:
+      signal_file = "schemas/dist/python3/odim/hooks/"+database+"/"+collection_name.lower() +".py"
+    signal_file = location_tester(signal_file)
 
     with open(file, "r") as f:
       data = json.loads(f.read())
@@ -123,6 +128,20 @@ class ModelFactory(object):
         meta_attrs["db_name"] = db_name
       if db_uri:
         meta_attrs["db_uri"] = db_uri
+      if signal_file: # now handle the signals
+        spec = importlib.util.spec_from_file_location("odim.dynmodels.%s.signals" % class_name, signal_file)
+        foo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(foo)
+        for n,x in inspect.getmembers(foo, inspect.isfunction):
+          if not "odim_hooks" in meta_attrs:
+            meta_attrs["odim_hooks"] = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
+          meta_attrs["odim_hooks"][n].append(x)
+          # if n == "pre_validate":
+          #   if not hasattr(m, ".__pre_root_validators__"):
+          #     m.__pre_root_validators__ = [x]
+          # if n == "post_validate":
+          #   if not hasattr(m, ".__post_root_validators__"):
+          #     m.__post_root_validators__ = [x]
       setattr(m, 'Config', type('class', (), meta_attrs))
       m.__doc__ = description
       m.update_forward_refs()
