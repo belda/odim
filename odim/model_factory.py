@@ -101,7 +101,7 @@ class ModelFactory(object):
 
     with open(file, "r") as f:
       data = json.loads(f.read())
-      cls = {}
+      newcls = {}
       for k,v in data.items():
         if k in ("__class_name","__title"):
           if not class_name:
@@ -110,14 +110,14 @@ class ModelFactory(object):
           if not description:
             description = v
         else:
-          cls[k] = encode(k, v)
+          newcls[k] = encode(k, v)
 
       if not class_name:
         class_name = collection_name
       m = create_model(class_name,
                        __module__ = "odim.dynmodels",
                        __base__=BaseMongoModel,
-                       **cls)
+                       **newcls)
       meta_attrs = {"collection_name": collection_name, **vars(BaseMongoModel.Config)}
       if db_name:
         meta_attrs["db_name"] = db_name
@@ -132,12 +132,12 @@ class ModelFactory(object):
   @classmethod
   def model_to_json(cls, model : Union[str, BaseModel, BaseModel.__class__]):
     if isinstance(model, str):
-      cls = get_class_by_name(model)
+      newcls = get_class_by_name(model)
     elif not inspect.isclass(model):
-      cls = model.__class__
+      newcls = model.__class__
     else:
-      cls = model
-    pydschema = cls.schema()
+      newcls = model
+    pydschema = newcls.schema()
     out = {}
     for propname, vals in pydschema["properties"].items():
       out[propname] = {}
