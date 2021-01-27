@@ -136,12 +136,6 @@ class ModelFactory(object):
           if not "odim_hooks" in meta_attrs:
             meta_attrs["odim_hooks"] = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
           meta_attrs["odim_hooks"][n].append(x)
-          # if n == "pre_validate":
-          #   if not hasattr(m, ".__pre_root_validators__"):
-          #     m.__pre_root_validators__ = [x]
-          # if n == "post_validate":
-          #   if not hasattr(m, ".__post_root_validators__"):
-          #     m.__post_root_validators__ = [x]
       setattr(m, 'Config', type('class', (), meta_attrs))
       m.__doc__ = description
       m.update_forward_refs()

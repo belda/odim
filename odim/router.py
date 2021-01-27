@@ -7,7 +7,7 @@ import fastapi
 from fastapi import Depends, params
 from pydantic import BaseModel
 
-from odim import Odim, SearchResponse
+from odim import Odim, OkResponse, SearchResponse
 from odim.dependencies import SearchParams
 
 
@@ -109,12 +109,13 @@ class OdimRouter(fastapi.APIRouter):
                      include_in_schema = include_in_schema)
 
     if 'delete' in add_methods:
-      async def delete(id : str):
+      async def delete(id : str) -> None:
         await Odim(model).delete(id)
+        return OkResponse()
       self.add_api_route(path = path+"{id}",
                      endpoint=delete,
-                     response_model=None,
-                     status_code=204,
+                     response_model=OkResponse,
+                     status_code=200,
                      tags=tags,
                      dependencies = dependencies,
                      summary="Deletes %s" % model.schema().get('title'),
@@ -199,9 +200,9 @@ async def update_{model_name}(id : str, obj : {model_name}):
 
     if 'delete' in add_methods:
       print(f'''
-@router.delete("{path}{{id}}", status_code=204, response_model={model_name}{other})
+@router.delete("{path}{{id}}", status_code=200, response_model=OkResponse)
 async def delete_{model_name}(id : str):
   await Odim(obj).delete(id)
-  return obj
+  return OkResponse()
 ''')
 

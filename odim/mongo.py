@@ -10,7 +10,7 @@ import inspect
 from pymongo import ASCENDING, DESCENDING
 
 import settings
-from odim import Odim, Operation, SearchParams, all_json_encoders
+from odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, all_json_encoders
 from odim.helper import get_connection_info
 
 log = logging.getLogger("uvicorn")
@@ -55,7 +55,7 @@ class ObjectId(BsonObjectId):
 
 
 
-class BaseMongoModel(BaseModel):
+class BaseMongoModel(BaseOdimModel):
   id: Optional[ObjectId] = Field(alias='_id', description="Unique identifier of the object") #
 
   class Config:
@@ -123,6 +123,8 @@ class OdimMongo(Odim):
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
     ret = await mongo_client[collection].find_one({"_id" : id})
+    if not ret:
+      raise NotFoundException()
     ret = self.execute_hooks("pre_init", ret)
     x = self.model(**ret)
     return self.execute_hooks("post_init", x)
@@ -173,7 +175,8 @@ class OdimMongo(Odim):
     curs = mongo_client[collection].find(query, **find_params)
     rsplist = []
     for x in await curs.to_list(None):
-      m = self.model( **self.execute_hooks("pre_init", x) )
+      x2 = self.execute_hooks("pre_init", x)
+      m = self.model( **x2 )
       rsplist.append( self.execute_hooks("post_init", m) )
     return rsplist
 
@@ -196,6 +199,8 @@ class OdimMongo(Odim):
       d = obj.dict()
     if self.has_hooks("pre_remove","post_remove"):
       ret = await mongo_client[collection].find_one(d)
+      if not ret:
+        raise NotFoundException()
       ret = self.execute_hooks("pre_init", ret)
       x = self.model(**ret)
       x = self.execute_hooks("post_init", x)
@@ -203,3 +208,4 @@ class OdimMongo(Odim):
     rsp = await mongo_client[collection].delete_one(d)
     if self.has_hooks("pre_remove","post_remove"):
       self.execute_hooks("post_remove", x)
+    return rsp

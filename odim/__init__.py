@@ -4,7 +4,7 @@ import inspect
 from enum import Enum
 from typing import List, Optional, TypeVar, Union, Generic
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 from pydantic.generics import GenericModel
 from datetime import datetime
 from odim.helper import get_config, get_connection_info, get_connector_for_model
@@ -31,6 +31,10 @@ class SearchResponse(GenericModel, Generic[T]):
     json_encoders = all_json_encoders
 
 
+class OkResponse(BaseModel):
+  ok : bool = Field(default=True)
+
+
 class Operation(Enum):
   exact = "__is"
   isnot = "__not"
@@ -49,8 +53,20 @@ def parse_fieldop(field):
 
 
 class BaseOdimModel(BaseModel):
-  pass
 
+  @root_validator(pre=True)
+  def generic_validators_pre(cls, values):
+    if hasattr(cls, "Config") and hasattr(cls.Config, "odim_hooks"):
+      for fnc in cls.Config.odim_hooks.get("pre_validate",[]):
+        values = fnc(values)
+    return values
+
+  @root_validator()
+  def generic_validators_post(cls, values):
+    if hasattr(cls, "Config") and hasattr(cls.Config, "odim_hooks"):
+      for fnc in cls.Config.odim_hooks.get("post_validate",[]):
+        values = fnc(values)
+    return values
 
 
 class Odim(object):
