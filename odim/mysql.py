@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from pymysql import escape_string
 from pymysql.converters import escape_bytes_prefixed, escape_item
 
-import settings
 from odim import NotFoundException, Odim, Operation, SearchParams, get_connection_info
 
 log = logging.getLogger("uvicorn")

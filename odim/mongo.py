@@ -9,23 +9,12 @@ import inspect
 
 from pymongo import ASCENDING, DESCENDING
 
-import settings
 from odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, all_json_encoders
 from odim.helper import get_connection_info
 
 log = logging.getLogger("uvicorn")
 
 client_connections = {}
-
-async def preinit_mongo_connections():
-  global mongo_client
-  mongo_client = AsyncIOMotorClient(settings.MONGO_URI)
-  log.info("DB connected")
-
-async def shutdown_mongo_client():
-  for cc in client_connections:
-    cc.close()
-  log.info("DB disconnected")
 
 
 def get_mongo_client(alias):

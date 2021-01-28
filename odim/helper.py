@@ -20,6 +20,8 @@ def get_config(confvar, default=None):
       settings_module = __import__('config')
     modsloaded = True
   if settings_module:
+    if hasattr(settings_module,"get"):
+      return settings_module.get(confvar, default)
     return getattr(settings_module, confvar, default)
   return default
 
