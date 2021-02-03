@@ -4,9 +4,11 @@ import random
 import string
 import importlib
 import sys
+from decimal import Decimal
+from enum import Enum
 from os import path, getcwd
 from typing import Any, List, Optional, Type, Union
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel, Field, create_model
 from odim.mongo import BaseMongoModel, ObjectId
 from datetime import datetime
 from odim import dynmodels
@@ -25,19 +27,29 @@ MM_TYPE_MAPPING = {
   "Boolean" : "bool",
   "Array" : "List",
   "Date" : "datetime",
-  "ObjectId" : "ObjectId"}
+  "Int" : "int",
+  "Decimal" : "Decimal",
+  "Decimal128" : "Decimal",
+  "ObjectId" : "ObjectId",
+  "Enum" : "str"}
 
 
 DM_TYPE_MAPPING = {
   "String" : str,
-  "Number" : float,
+  "Number" : int,
   "Boolean" : bool,
   "Array" : list,
   "Date" : datetime,
   "ObjectId" : ObjectId,
-  "Parent": dict
+  "Parent": dict,
+  "Int" : int,
+  "Decimal" : Decimal,
+  "Decimal128" : Decimal,
+  "Enum" : str
 }
 
+class SEnum(str, Enum):
+  pass
 
 def encode(k, v):
   if isinstance(v, list):
@@ -52,22 +64,34 @@ def encode(k, v):
         subcls = {}
         for ks,vs in v.get("child", {}).items():
           subcls[ks] = encode(ks, vs)
-        m = create_model(__model_name=v.get("__title", "subdocument"+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))),
+        m = create_model(__model_name=v.get("__title", k+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))).capitalize(),
                          __module__ = "odim.dynmodels",
                          __base__=BaseModel,
                          **subcls)
         if "__description" in v:
           m.__doc__ = v.get("__description")
         dt = m
-      elif v.get("type") == "Number" and v.get("integer"):
-        dt = int
+      elif v.get("type") == "Enum":
+        subcls = {}
+        for opt in v.get("options",[]):
+          subcls[opt] = opt
+
+        m = SEnum(v.get("__title", k.capitalize()+"Enum"+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))), subcls)
+        if "__description" in v:
+          m.__doc__ = v.get("__description")
+        dt = m
       else:
         dt = DM_TYPE_MAPPING.get(v.get("type"), str)
 
-      if v.get("required", False) or v.get("default", True) in ('', False, None):
-        return Optional[dt], v.get("default", None)
+      field = Field(description=v.get("__description",v.get("description","")), title=v.get("__title", v.get("title")))
+      if v.get("regex"):
+        field.regex = v.get("regex")
+      if v.get("required", False) or v.get("default", False) not in ('', False, None):
+        field.default = v.get("default",...) #TODO default value removes the required attribute
+        return dt, field
       else:
-        return dt, v.get("default", None)
+        field.default = v.get("default", None)
+        return Optional[dt], field
   else:
     return Optional[DM_TYPE_MAPPING.get(v, str)], None
 
@@ -164,6 +188,8 @@ class ModelFactory(object):
         out[propname]["type"] = "Boolean"
       elif vals["type"] in ("integer","number"):
         out[propname]["type"] = "Number"
+      elif vals["type"].lower() in ("float","double",'decimal'):
+        out[propname]["type"] = "Decimal128"
       elif vals["type"] == "array":
         out[propname]["type"] = "Array"
 
