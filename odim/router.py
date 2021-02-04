@@ -1,15 +1,14 @@
 '''
 Contains the extended FastAPI router, for simplified CRUD from a model
 '''
-from typing import List, Optional, Sequence, Set, Type, Union
+from typing import Any, List, Optional, Sequence, Set, Type, Union
 
 import fastapi
 from fastapi import Depends, params
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 
 from odim import Odim, OkResponse, SearchResponse
 from odim.dependencies import SearchParams
-
 
 class OdimRouter(fastapi.APIRouter):
   ''' Simplified FastAPI router for easy CRUD '''
@@ -22,7 +21,8 @@ class OdimRouter(fastapi.APIRouter):
                  dependencies : Optional[Sequence[params.Depends]] = None,
                  include_in_schema: bool = True,
                  methods : Optional[Union[Set[str], List[str]]] = ('create','get','search','save','update','delete'),
-                 methods_exclude : Optional[Union[Set[str], List[str]]] = []):
+                 methods_exclude : Optional[Union[Set[str], List[str]]] = [],
+                 search_limits = {}):
     ''' Add endpoints for CRUD operations for particular model
     :param path: base_path, for the model resource location eg: /api/houses/
     :param model: pydantic/Odim BaseModel, that is used for eg. Houses
@@ -44,7 +44,7 @@ class OdimRouter(fastapi.APIRouter):
                          status_code=201,
                          tags=tags,
                          dependencies = dependencies,
-                         summary="Create new %ss" % model.schema().get('title'),
+                         summary="Create new %s" % model.schema().get('title'),
                          description = "Create new instance of %s " %  model.schema().get('title'),
                          methods = ["POST"],
                          include_in_schema = include_in_schema)
@@ -57,7 +57,7 @@ class OdimRouter(fastapi.APIRouter):
                          response_model=model,
                          tags=tags,
                          dependencies = dependencies,
-                         summary="Get %s" % model.schema().get('title'),
+                         summary="Get %s by id" % model.schema().get('title'),
                          description = "Return individual %s details " % model.schema().get('title'),
                          methods = ["GET"],
                          include_in_schema = include_in_schema)
@@ -88,7 +88,7 @@ class OdimRouter(fastapi.APIRouter):
                      response_model=model,
                      tags=tags,
                      dependencies = dependencies,
-                     summary="Replace %s" % model.schema().get('title'),
+                     summary="Replace %s by id" % model.schema().get('title'),
                      description = "PUT replaces the original %s as whole  " %  model.schema().get('title'),
                      methods = ["PUT"],
                      include_in_schema = include_in_schema)
@@ -103,7 +103,7 @@ class OdimRouter(fastapi.APIRouter):
                      response_model=model,
                      tags=tags,
                      dependencies = dependencies,
-                     summary="Partial update %s" % model.schema().get('title'),
+                     summary="Partial update %s by id" % model.schema().get('title'),
                      description = "Just updates individual fields of %s " %  model.schema().get('title'),
                      methods = ["Patch"],
                      include_in_schema = include_in_schema)
@@ -118,7 +118,7 @@ class OdimRouter(fastapi.APIRouter):
                      status_code=200,
                      tags=tags,
                      dependencies = dependencies,
-                     summary="Deletes %s" % model.schema().get('title'),
+                     summary="Delete %s by id" % model.schema().get('title'),
                      description = "Deletes individual instance of %s " %  model.schema().get('title'),
                      methods = ["DELETE"],
                      include_in_schema = include_in_schema)

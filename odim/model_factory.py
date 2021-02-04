@@ -26,12 +26,14 @@ MM_TYPE_MAPPING = {
   "Number" : 'float',
   "Boolean" : "bool",
   "Array" : "List",
+  "List" : "List",
   "Date" : "datetime",
   "Int" : "int",
   "Decimal" : "Decimal",
   "Decimal128" : "Decimal",
   "ObjectId" : "ObjectId",
-  "Enum" : "str"}
+  "Enum" : "str",
+  "Mixed" : "Any"}
 
 
 DM_TYPE_MAPPING = {
@@ -39,13 +41,15 @@ DM_TYPE_MAPPING = {
   "Number" : int,
   "Boolean" : bool,
   "Array" : list,
+  "List" : list,
   "Date" : datetime,
   "ObjectId" : ObjectId,
   "Parent": dict,
   "Int" : int,
   "Decimal" : Decimal,
   "Decimal128" : Decimal,
-  "Enum" : str
+  "Enum" : str,
+  "Mixed" : Any
 }
 
 class SEnum(str, Enum):
@@ -54,17 +58,17 @@ class SEnum(str, Enum):
 def encode(k, v):
   if isinstance(v, list):
     if len(v) == 0:
-      return List[Any], None
+      return Optional[List[Any]], None
     else:
       enc = encode("sub", v[0])
-      return List[enc[0]], enc[1]
+      return Optional[List[enc[0]]], enc[1]
 
   elif isinstance(v, dict):
       if v.get("type") == "Parent":
         subcls = {}
         for ks,vs in v.get("child", {}).items():
           subcls[ks] = encode(ks, vs)
-        m = create_model(__model_name=v.get("__title", k+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))).capitalize(),
+        m = create_model(__model_name=v.get("__title", k+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))).capitalize(), #TODO have a register for duplicate class names or use already made class
                          __module__ = "odim.dynmodels",
                          __base__=BaseModel,
                          **subcls)
