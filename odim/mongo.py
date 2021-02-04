@@ -75,7 +75,7 @@ class OdimMongo(Odim):
     return get_mongo_client(self.get_connection_identifier())
 
 
-  async def save(self) -> ObjectId:
+  async def save(self, extend_query = {}) -> ObjectId:
     mongo_client = await self.get_mongo_client()
     if not self.instance:
       raise AttributeError("Can not save, instance not specified ")#describe more how ti instantiate
@@ -84,12 +84,18 @@ class OdimMongo(Odim):
     collection = self.get_collection_name()
     iii = self.execute_hooks("pre_save", self.instance)
     dd = iii.dict(by_alias=True)
-    ret = await mongo_client[collection].insert_one(dd)
-    dd = self.execute_hooks("post_save", dd)
-    return ret.inserted_id
+    if len(extend_query)>0:
+      ret = await mongo_client[collection].replace_one({"_id" : self.instance.id, **self.get_parsed_query(extend_query)}, dd)
+      assert ret.modified_count > 0, "Not modified error"
+      dd = self.execute_hooks("post_save", dd)
+      return self.instance.id
+    else:
+      ret = await mongo_client[collection].insert_one(dd)
+      dd = self.execute_hooks("post_save", dd)
+      return ret.inserted_id
 
 
-  async def update(self):
+  async def update(self, extend_query = {}):
     ''' Saves only the changed fields leaving other fields alone '''
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
@@ -101,17 +107,17 @@ class OdimMongo(Odim):
     if isinstance(dd_id, str):
       dd_id = ObjectId(dd_id)
     del dd["_id"]
-    ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id}, {"$set" : dd})
+    ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **self.get_parsed_query(extend_query)}, {"$set" : dd})
     dd = self.execute_hooks("post_save", dd)
     return ret
 
 
-  async def get(self, id : Union[str, ObjectId], **kwargs):
+  async def get(self, id : Union[str, ObjectId], extend_query = {}):
     if isinstance(id, str):
       id = ObjectId(id)
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
-    ret = await mongo_client[collection].find_one({"_id" : id})
+    ret = await mongo_client[collection].find_one({"_id" : id, **self.get_parsed_query(extend_query)})
     if not ret:
       raise NotFoundException()
     ret = self.execute_hooks("pre_init", ret)
@@ -177,7 +183,7 @@ class OdimMongo(Odim):
     return await mongo_client[collection].count_documents(query)
 
 
-  async def delete(self, obj : Union[str, ObjectId, BaseMongoModel]):
+  async def delete(self, obj : Union[str, ObjectId, BaseMongoModel], extend_query = {}):
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
     if isinstance(obj, str):
@@ -186,6 +192,7 @@ class OdimMongo(Odim):
       d = {"_id" : obj}
     else:
       d = obj.dict()
+    d.update(self.get_parsed_query(extend_query))
     if self.has_hooks("pre_remove","post_remove"):
       ret = await mongo_client[collection].find_one(d)
       if not ret:

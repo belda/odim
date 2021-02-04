@@ -60,8 +60,11 @@ def encode(k, v):
     if len(v) == 0:
       return Optional[List[Any]], None
     else:
-      enc = encode("sub", v[0])
-      return Optional[List[enc[0]]], enc[1]
+      if v[0] == "Mixed": #workaround for subdocuments
+        return Optional[List[Any]], None
+      else:
+        enc = encode("sub", v[0])
+        return Optional[List[enc[0]]], enc[1]
 
   elif isinstance(v, dict):
       if v.get("type") == "Parent":
@@ -96,7 +99,7 @@ def encode(k, v):
       else:
         field.default = v.get("default", None)
         return Optional[dt], field
-  else:
+  else: #a string is there as value
     return Optional[DM_TYPE_MAPPING.get(v, str)], None
 
 
@@ -163,7 +166,8 @@ class ModelFactory(object):
         for n,x in inspect.getmembers(foo, inspect.isfunction):
           if not "odim_hooks" in meta_attrs:
             meta_attrs["odim_hooks"] = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
-          meta_attrs["odim_hooks"][n].append(x)
+          if n in meta_attrs["odim_hooks"].keys():
+            meta_attrs["odim_hooks"][n].append(x)
       setattr(m, 'Config', type('class', (), meta_attrs))
       m.__doc__ = description
       m.update_forward_refs()

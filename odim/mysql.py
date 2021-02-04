@@ -1,3 +1,4 @@
+#TODO extend_query must be implemented
 import logging
 import re
 from enum import Enum
@@ -75,7 +76,7 @@ class OdimMysql(Odim):
     return ci, self.model.__class__.__name__
 
 
-  async def get(self, id : str, **kwargs):
+  async def get(self, id : str, extend_query = {}):
     '''
     Retrieves the document by its id
     :param id: id of the docuemnt
@@ -89,7 +90,7 @@ class OdimMysql(Odim):
     return self.model(**rsp)
 
 
-  async def save(self):
+  async def save(self, extend_query = {}):
     ''' Saves the document and returns its identifier '''
     db, table = self.get_table_name()
     do = self.instance.dict(by_alias=True)
@@ -111,7 +112,7 @@ class OdimMysql(Odim):
       return self.instance.id
 
 
-  async def update(self):
+  async def update(self, extend_query = {}):
     ''' Updates just the partial document '''
     db, table = self.get_table_name()
     dd = self.instance.dict(exclude_unset=True)
@@ -185,7 +186,7 @@ class OdimMysql(Odim):
     return rsp["cnt"]
 
 
-  async def delete(self, obj : Union[str, int, BaseModel]):
+  async def delete(self, obj : Union[str, int, BaseModel], extend_query = {}):
     ''' Delete the document from storage '''
     db, table = self.get_table_name()
     id = obj if not isinstance(obj, BaseModel) else obj.id

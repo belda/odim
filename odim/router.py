@@ -22,7 +22,7 @@ class OdimRouter(fastapi.APIRouter):
                  include_in_schema: bool = True,
                  methods : Optional[Union[Set[str], List[str]]] = ('create','get','search','save','update','delete'),
                  methods_exclude : Optional[Union[Set[str], List[str]]] = [],
-                 search_limits = {}):
+                 extend_query : dict= {}):
     ''' Add endpoints for CRUD operations for particular model
     :param path: base_path, for the model resource location eg: /api/houses/
     :param model: pydantic/Odim BaseModel, that is used for eg. Houses
@@ -31,11 +31,14 @@ class OdimRouter(fastapi.APIRouter):
     :param include_in_schema: whether to include in docs
     :param methods: methods to automatically generate ('create','get','search','save','update','delete')
     :param methods_exclude: methods to NOT automatically generate ('create','get','search','save','update','delete')
+    :param extend_query: adds these parameters to every query and sets it on the object upon creation. keys are fields, values can be exact values or functions taking request as parameter
     '''
     add_methods = [ x for x in methods if x not in methods_exclude ]
 
     if 'create' in add_methods:
-      async def create(obj : model):
+      async def create(request : fastapi.Request, obj : model):
+        for k, v in exec_extend_qeury(request,extend_query).items():
+          setattr(obj, k, v)
         await Odim(obj).save()
         return obj
       self.add_api_route(path = path,
@@ -50,8 +53,8 @@ class OdimRouter(fastapi.APIRouter):
                          include_in_schema = include_in_schema)
 
     if 'get' in add_methods:
-      async def get(id : str):
-        return await Odim(model).get(id=id)
+      async def get(request : fastapi.Request, id : str):
+        return await Odim(model).get(id=id, extend_query=exec_extend_qeury(request,extend_query))
       self.add_api_route(path = path+"{id}",
                          endpoint=get,
                          response_model=model,
@@ -63,9 +66,10 @@ class OdimRouter(fastapi.APIRouter):
                          include_in_schema = include_in_schema)
 
     if 'search' in add_methods:
-      async def search(search_params : dict = Depends(SearchParams)):
-        rsp = { "results" : await Odim(model).find(search_params.q, search_params),
-                "total" : await Odim(model).count(search_params.q),
+      async def search(request : fastapi.Request, search_params : dict = Depends(SearchParams)):
+        sp = {**search_params.q, **exec_extend_qeury(request,extend_query)}
+        rsp = { "results" : await Odim(model).find(sp, search_params),
+                "total" : await Odim(model).count(sp),
                 "search" : search_params.dict()}
         return rsp
       self.add_api_route(path = path,
@@ -79,9 +83,9 @@ class OdimRouter(fastapi.APIRouter):
                          include_in_schema = include_in_schema)
 
     if 'save' in add_methods:
-      async def save(id : str, obj : model):
+      async def save(request : fastapi.Request, id : str, obj : model):
         obj.id = id
-        await Odim(obj).save()
+        await Odim(obj).save(extend_query=exec_extend_qeury(request,extend_query))
         return obj
       self.add_api_route(path = path+"{id}",
                      endpoint=save,
@@ -94,9 +98,9 @@ class OdimRouter(fastapi.APIRouter):
                      include_in_schema = include_in_schema)
 
     if 'update' in add_methods:
-      async def update(id : str, obj : model):
+      async def update(request : fastapi.Request, id : str, obj : model):
         obj.id = id
-        await Odim(obj).update()
+        await Odim(obj).update(extend_query=exec_extend_qeury(request,extend_query))
         return obj
       self.add_api_route(path = path+"{id}",
                      endpoint=update,
@@ -109,8 +113,8 @@ class OdimRouter(fastapi.APIRouter):
                      include_in_schema = include_in_schema)
 
     if 'delete' in add_methods:
-      async def delete(id : str) -> None:
-        await Odim(model).delete(id)
+      async def delete(request : fastapi.Request, id : str) -> None:
+        await Odim(model).delete(id, extend_query=exec_extend_qeury(request,extend_query))
         return OkResponse()
       self.add_api_route(path = path+"{id}",
                      endpoint=delete,
@@ -206,3 +210,13 @@ async def delete_{model_name}(id : str):
   return OkResponse()
 ''')
 
+
+
+def exec_extend_qeury(request : fastapi.Request, sl : dict = {}):
+  out = {}
+  for k, v in sl.items():
+    if callable(v):
+      out[k] = v(request)
+    else:
+      out[k] = v
+  return out

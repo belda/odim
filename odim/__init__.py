@@ -116,21 +116,21 @@ class Odim(object):
     return False
 
 
-  async def save(self):
+  async def save(self, extend_query = {}):
     ''' Saves the document and returns its identifier '''
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def update(self):
+  async def update(self, extend_query = {}):
     ''' Saves only the changed fields leaving other fields alone '''
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def get(self, id : str, **kwargs):
+  async def get(self, id : str, extend_query = {}):
     '''
     Retrieves the document by its id
     :param id: id of the docuemnt
-    :param kwargs:
+    :param extend_query additional search limiters:
     :return: the document as pydantic instance
     '''
     raise NotImplementedError("Method not implemented for this connector")
@@ -161,7 +161,7 @@ class Odim(object):
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def delete(self, obj : str):
+  async def delete(self, obj : str, extend_query = {}):
     ''' Delete the document from storage '''
     raise NotImplementedError("Method not implemented for this connector")
 
