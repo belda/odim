@@ -100,6 +100,9 @@ class Odim(object):
         return key
     raise AttributeError("missing database definition")
 
+  def softdelete(self):
+    if hasattr(self.model, 'Config'):
+      return getattr(self.model.Config,'softdelete')
 
   def execute_hooks(self, hook_type, obj):
     if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks"):
@@ -116,17 +119,17 @@ class Odim(object):
     return False
 
 
-  async def save(self, extend_query = {}):
+  async def save(self, extend_query : dict= {}, include_deleted : bool = False):
     ''' Saves the document and returns its identifier '''
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def update(self, extend_query = {}):
+  async def update(self, extend_query : dict= {}, include_deleted : bool = False):
     ''' Saves only the changed fields leaving other fields alone '''
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def get(self, id : str, extend_query = {}):
+  async def get(self, id : str, extend_query : dict= {}, include_deleted : bool = False):
     '''
     Retrieves the document by its id
     :param id: id of the docuemnt
@@ -145,7 +148,7 @@ class Odim(object):
     return rsp
 
 
-  async def find(self, query : dict, params : SearchParams = None):
+  async def find(self, query : dict, params : SearchParams = None, include_deleted : bool = False):
     ''' Performs search using a dictionary qury to find documents on that particular collection/table
     :param query: dictionary of field:value pairs
     :param params: additional search params like ordering and limit offset
@@ -153,7 +156,7 @@ class Odim(object):
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def count(self, query : dict) -> int:
+  async def count(self, query : dict, include_deleted : bool = False) -> int:
     ''' Do the search and count the documents
 
     :param query: dictionary of field:value pairs
@@ -161,7 +164,7 @@ class Odim(object):
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def delete(self, obj : str, extend_query = {}):
+  async def delete(self, obj : str, extend_query = {}, force_harddelete : bool = False):
     ''' Delete the document from storage '''
     raise NotImplementedError("Method not implemented for this connector")
 

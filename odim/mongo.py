@@ -79,27 +79,38 @@ class OdimMongo(Odim):
     return self.get_mongo_client()[self.get_collection_name()]
 
 
+  async def get(self, id : Union[str, ObjectId], extend_query : dict= {}, include_deleted : bool = False):
+    if isinstance(id, str):
+      id = ObjectId(id)
+    mongo_client = await self.get_mongo_client()
+    collection = self.get_collection_name()
+    softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
+    ret = await mongo_client[collection].find_one({"_id" : id, **softdel, **self.get_parsed_query(extend_query)})
+    if not ret:
+      raise NotFoundException()
+    ret = self.execute_hooks("pre_init", ret)
+    x = self.model(**ret)
+    return self.execute_hooks("post_init", x)
+
+
   async def save(self, extend_query : dict= {}, include_deleted : bool = False) -> ObjectId:
     mongo_client = await self.get_mongo_client()
     if not self.instance:
       raise AttributeError("Can not save, instance not specified ")#describe more how ti instantiate
-    if not self.instance.id:
-      self.instance.id = BsonObjectId()
     collection = self.get_collection_name()
     iii = self.execute_hooks("pre_save", self.instance)
     dd = iii.dict(by_alias=True)
-    if self.softdelete() and self.softdelete() not in dd:
-      dd[self.softdelete()] = False
-    if len(extend_query)>0:
+
+    if not self.instance.id:
+      dd["_id"] = BsonObjectId()
+      softdel = {self.softdelete(): False} if self.softdelete() else {}
+      ret = await mongo_client[collection].insert_one({**dd, **extend_query, **softdel})
+    else:
       softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
       ret = await mongo_client[collection].replace_one({"_id" : self.instance.id, **softdel, **self.get_parsed_query(extend_query)}, dd)
       assert ret.modified_count > 0, "Not modified error"
-      dd = self.execute_hooks("post_save", dd)
-      return self.instance.id
-    else:
-      ret = await mongo_client[collection].insert_one(dd)
-      dd = self.execute_hooks("post_save", dd)
-      return ret.inserted_id
+    dd = self.execute_hooks("post_save", dd)
+    return self.instance.id
 
 
   async def update(self, extend_query : dict= {}, include_deleted : bool = False):
@@ -118,20 +129,6 @@ class OdimMongo(Odim):
     ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
     dd = self.execute_hooks("post_save", dd)
     return ret
-
-
-  async def get(self, id : Union[str, ObjectId], extend_query : dict= {}, include_deleted : bool = False):
-    if isinstance(id, str):
-      id = ObjectId(id)
-    mongo_client = await self.get_mongo_client()
-    collection = self.get_collection_name()
-    softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-    ret = await mongo_client[collection].find_one({"_id" : id, **softdel, **self.get_parsed_query(extend_query)})
-    if not ret:
-      raise NotFoundException()
-    ret = self.execute_hooks("pre_init", ret)
-    x = self.model(**ret)
-    return self.execute_hooks("post_init", x)
 
 
   def get_parsed_query(self, query):

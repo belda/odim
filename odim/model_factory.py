@@ -123,6 +123,7 @@ class ModelFactory(object):
                        description=None,
                        db_name=None, db_uri=None,
                        database=None, collection_name=None,
+                       softdelete=None,
                        file_uri=None, signal_file=None) -> Type[BaseMongoModel]:
 
     assert db_name or db_uri, "Either database_name or database_uri must be specified"
@@ -160,6 +161,8 @@ class ModelFactory(object):
         meta_attrs["db_name"] = db_name
       if db_uri:
         meta_attrs["db_uri"] = db_uri
+      if softdelete:
+        meta_attrs["softdelete"] = softdelete
       if signal_file: # now handle the signals
         spec = importlib.util.spec_from_file_location("odim.dynmodels.%s.signals" % class_name, signal_file)
         foo = importlib.util.module_from_spec(spec)
