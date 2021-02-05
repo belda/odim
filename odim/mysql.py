@@ -1,4 +1,3 @@
-#TODO extend_query must be implemented
 import logging
 import re
 from enum import Enum
@@ -76,7 +75,7 @@ class OdimMysql(Odim):
     return ci, self.model.__class__.__name__
 
 
-  async def get(self, id : str, extend_query = {}):
+  async def get(self, id : str, extend_query : dict= {}, include_deleted : bool = False):
     '''
     Retrieves the document by its id
     :param id: id of the docuemnt
@@ -84,46 +83,62 @@ class OdimMysql(Odim):
     :return: the document as pydantic instance '''
     #TODO just the desired fields
     db, table = self.get_table_name()
-    rsp = await execute_sql(db, "SELECT * FROM %s WHERE id=%s" % (escape_string(table), self.escape(id)), Op.fetchone)
+    query = {"id" : self.escape(id), **extend_query}
+    if self.softdelete() and not include_deleted:
+      query[self.softdelete()] = False
+    wh = self.get_where(query)
+    rsp = await execute_sql(db, "SELECT * FROM %s WHERE %s" % (escape_string(table), wh), Op.fetchone)
     if not rsp:
       raise NotFoundException()
-    return self.model(**rsp)
+    ret = self.execute_hooks("pre_init", rsp)
+    x = self.model(**ret)
+    return self.execute_hooks("post_init", x)
 
-
-  async def save(self, extend_query = {}):
-    ''' Saves the document and returns its identifier '''
-    db, table = self.get_table_name()
-    do = self.instance.dict(by_alias=True)
+  def get_field_pairs(self, field_dict):
     inss = []
-    for k, v in do.items():
+    for k, v in field_dict.items():
       if not re.match("[a-zA-Z0-9_]+", k):
         raise AttributeError("Writing a non ASCII field name")
       if k!="id":
         inss.append( "`"+k+"`="+str(self.escape(v)) )
-    upff = ",".join(inss)
+    return ",".join(inss)
+
+  async def save(self, extend_query : dict= {}, include_deleted : bool = False):
+    ''' Saves the document and returns its identifier '''
+    db, table = self.get_table_name()
+    iii = self.execute_hooks("pre_save", self.instance)
+    do = iii.dict(by_alias=True)
+
     if self.instance.id in (None, ""):
+      if self.softdelete() and self.softdelete() not in do:
+        do[self.softdelete()] = False
+      upff = self.get_field_pairs({**extend_query, **do})
       rsp = await execute_sql(db, "INSERT INTO %s SET %s" % (escape_string(table), upff), Op.execute)
       self.instance.id = rsp.lastrowid
+      do = self.execute_hooks("post_save", do)
       return rsp.lastrowid
     else:
-      idf = "`id`="+str(self.escape(self.instance.id))
-      sql = "INSERT INTO %s SET %s ON DUPLICATE KEY UPDATE %s  " % ( escape_string(table), idf+","+upff, upff )
+      softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
+      upff = self.get_field_pairs(do)
+      whr = self.get_where({"id" : self.instance.id, **softdel, **extend_query})
+      sql = "UPDATE %s SET %s WHERE %s" % (escape_string(table), upff, whr)
       rsp = await execute_sql(db, sql, Op.execute)
+      do = self.execute_hooks("post_save", do)
       return self.instance.id
 
 
-  async def update(self, extend_query = {}):
+  async def update(self, extend_query : dict= {}, include_deleted : bool = False):
     ''' Updates just the partial document '''
     db, table = self.get_table_name()
-    dd = self.instance.dict(exclude_unset=True)
+    iii = self.execute_hooks("pre_save", self.instance)
+    dd = iii.dict(exclude_unset=True, by_alias=True)
     dd_id = dd["id"]
-    del dd["id"]
-    updates = []
-    for k,v in dd.items():
-      updates.append( "`"+k+"`="+str(self.escape(v)) )
-    sql = "UPDATE %s SET %s WHERE id=%s" % (escape_string(table), " , ".join(updates), self.escape(dd_id))
-    #TODO detect not found
-    await execute_sql(db, sql, Op.execute)
+    softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
+    upff = self.get_field_pairs(dd)
+    whr = self.get_where({"id" :dd_id, **softdel, **extend_query})
+    sql = "UPDATE %s SET %s WHERE %s" % (escape_string(table), upff, whr)
+    rsp = await execute_sql(db, sql, Op.execute)
+    do = self.execute_hooks("post_save", do)
 
 
   def get_where(self, query):
@@ -153,12 +168,14 @@ class OdimMysql(Odim):
     return  "1" if len(whr) == 0  else " AND ".join(whr)
 
 
-  async def find(self, query : dict, params : SearchParams = None):
+  async def find(self, query : dict, params : SearchParams = None, include_deleted : bool = False):
     ''' Performs search using a dictionary qury to find documents on that particular collection/table
     :param query: dictionary of field:value pairs
     :param params: additional search params like ordering and limit offset
     :return: the list of documents as per pydantic type    '''
     db, table = self.get_table_name()
+    if self.softdelete() and not include_deleted:
+      query = {self.softdelete(): False, **query}
     where = self.get_where(query)
     sql_params = ""
     if params:
@@ -173,24 +190,36 @@ class OdimMysql(Odim):
       if params.offset:
         sql_params+= " OFFSET "+str(params.offset)
     rsp = await execute_sql(db, "SELECT * FROM %s WHERE %s %s" % (escape_string(table), where, sql_params), Op.fetchall)
-    return [ self.model(**row) for row in rsp ]
+    rsplist = []
+    for row in rsp:
+      x2 = self.execute_hooks("pre_init", row)
+      m = self.model( **row )
+      rsplist.append( self.execute_hooks("post_init", m) )
+    return rsplist
 
 
-  async def count(self, query : dict) -> int:
+  async def count(self, query : dict, include_deleted : bool = False) -> int:
     ''' Do the search and count the documents
     :param query: dictionary of field:value pairs
     :return: the number of results '''
     db, table = self.get_table_name()
+    if self.softdelete() and not include_deleted:
+      query = {self.softdelete(): False, **query}
     where = self.get_where(query)
     rsp = await execute_sql(db, "SELECT COUNT(*) as cnt FROM %s WHERE %s" % (escape_string(table), where), Op.fetchone)
     return rsp["cnt"]
 
 
-  async def delete(self, obj : Union[str, int, BaseModel], extend_query = {}):
+  async def delete(self, obj : Union[str, int, BaseModel], extend_query : dict= {}, force_harddelete : bool = False):
     ''' Delete the document from storage '''
     db, table = self.get_table_name()
     id = obj if not isinstance(obj, BaseModel) else obj.id
-    await execute_sql(db, "DELETE FROM %s WHERE id=%s" % (escape_string(table), self.escape(id)), Op.execute)
+    if self.softdelete() and not force_harddelete:
+      whr = self.get_where({"id" : self.escape(id), **extend_query})
+      await execute_sql(db, "UPDATE %s SET `%s`=true WHERE %s" % (escape_string(table), self.softdelete(), whr), Op.execute)
+    else:
+      whr = self.get_where({"id" : self.escape(id), **extend_query})
+      await execute_sql(db, "DELETE FROM %s WHERE %s" % (escape_string(table), whr), Op.execute)
     #TODO detect not found
 
 
