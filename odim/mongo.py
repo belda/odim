@@ -75,7 +75,11 @@ class OdimMongo(Odim):
     return get_mongo_client(self.get_connection_identifier())
 
 
-  async def save(self, extend_query = {}) -> ObjectId:
+  def mongo(self):
+    return self.get_mongo_client()[self.get_collection_name()]
+
+
+  async def save(self, extend_query : dict= {}, include_deleted : bool = False) -> ObjectId:
     mongo_client = await self.get_mongo_client()
     if not self.instance:
       raise AttributeError("Can not save, instance not specified ")#describe more how ti instantiate
@@ -84,8 +88,11 @@ class OdimMongo(Odim):
     collection = self.get_collection_name()
     iii = self.execute_hooks("pre_save", self.instance)
     dd = iii.dict(by_alias=True)
+    if self.softdelete() and self.softdelete() not in dd:
+      dd[self.softdelete()] = False
     if len(extend_query)>0:
-      ret = await mongo_client[collection].replace_one({"_id" : self.instance.id, **self.get_parsed_query(extend_query)}, dd)
+      softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
+      ret = await mongo_client[collection].replace_one({"_id" : self.instance.id, **softdel, **self.get_parsed_query(extend_query)}, dd)
       assert ret.modified_count > 0, "Not modified error"
       dd = self.execute_hooks("post_save", dd)
       return self.instance.id
@@ -95,7 +102,7 @@ class OdimMongo(Odim):
       return ret.inserted_id
 
 
-  async def update(self, extend_query = {}):
+  async def update(self, extend_query : dict= {}, include_deleted : bool = False):
     ''' Saves only the changed fields leaving other fields alone '''
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
@@ -107,17 +114,19 @@ class OdimMongo(Odim):
     if isinstance(dd_id, str):
       dd_id = ObjectId(dd_id)
     del dd["_id"]
-    ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **self.get_parsed_query(extend_query)}, {"$set" : dd})
+    softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
+    ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
     dd = self.execute_hooks("post_save", dd)
     return ret
 
 
-  async def get(self, id : Union[str, ObjectId], extend_query = {}):
+  async def get(self, id : Union[str, ObjectId], extend_query : dict= {}, include_deleted : bool = False):
     if isinstance(id, str):
       id = ObjectId(id)
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
-    ret = await mongo_client[collection].find_one({"_id" : id, **self.get_parsed_query(extend_query)})
+    softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
+    ret = await mongo_client[collection].find_one({"_id" : id, **softdel, **self.get_parsed_query(extend_query)})
     if not ret:
       raise NotFoundException()
     ret = self.execute_hooks("pre_init", ret)
@@ -151,9 +160,11 @@ class OdimMongo(Odim):
     return rsp
 
 
-  async def find(self, query : dict, params : SearchParams = None):
+  async def find(self, query : dict, params : SearchParams = None, include_deleted : bool = False):
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
+    if self.softdelete() and not include_deleted:
+      query = {self.softdelete(): False, **query}
     #TODO use projection on model to limit to only desired fields
     find_params = {}
     if params:
@@ -177,13 +188,15 @@ class OdimMongo(Odim):
 
 
 
-  async def count(self, query : dict):
+  async def count(self, query : dict, include_deleted : bool = False):
+    if self.softdelete() and not include_deleted:
+      query = {self.softdelete(): False, **query}
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
     return await mongo_client[collection].count_documents(query)
 
 
-  async def delete(self, obj : Union[str, ObjectId, BaseMongoModel], extend_query = {}):
+  async def delete(self, obj : Union[str, ObjectId, BaseMongoModel], extend_query : dict= {}, force_harddelete : bool = False):
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
     if isinstance(obj, str):
@@ -201,7 +214,10 @@ class OdimMongo(Odim):
       x = self.model(**ret)
       x = self.execute_hooks("post_init", x)
       x = self.execute_hooks("pre_remove", x)
-    rsp = await mongo_client[collection].delete_one(d)
+    if self.softdelete() and not force_harddelete:
+      rsp = await mongo_client[collection].find_one_and_update(d, {"$set" : {self.softdelete() : True}})
+    else:
+      rsp = await mongo_client[collection].delete_one(d)
     if self.has_hooks("pre_remove","post_remove"):
       self.execute_hooks("post_remove", x)
     return rsp
