@@ -69,6 +69,28 @@ class BaseOdimModel(BaseModel):
     return values
 
 
+  async def save(self, *args, **kwargs):
+    return await Odim(self).save(*args, **kwargs)
+
+  async def delete(self, force_harddelete = False):
+    return await Odim(self).delete(force_harddelete = force_harddelete)
+
+  @classmethod
+  async def find(cls, *args, **kwargs):
+    return await Odim(cls).find(*args, **kwargs)
+
+  @classmethod
+  async def count(cls, *args, **kwargs):
+    return await Odim(cls).count(*args, **kwargs)
+
+  @classmethod
+  async def get(cls, *args, **kwargs):
+    return await Odim(cls).get(*args, **kwargs)
+
+
+
+
+
 class Odim(object):
   ''' Initiates the wrapper to communicate with backends based on the pydantic model Config metaclass '''
   protocols = []
@@ -101,7 +123,7 @@ class Odim(object):
     raise AttributeError("missing database definition")
 
   def softdelete(self):
-    if hasattr(self.model, 'Config'):
+    if hasattr(self.model, 'Config') and hasattr(self.model.Config, 'softdelete'):
       return getattr(self.model.Config,'softdelete')
 
   def execute_hooks(self, hook_type, obj):

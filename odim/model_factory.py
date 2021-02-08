@@ -93,7 +93,10 @@ def encode(k, v):
       field = Field(description=v.get("__description",v.get("description","")), title=v.get("__title", v.get("title")))
       for sk, sv in v.items():
         if sk not in ("type","child","parent","description","__description","title","__title","required","default_factory","const","alias"):
-          setattr(field, sk, sv)
+          if sk in ('gt','ge','lt','le','multiple_of','min_items','max_items','min_length','max_length','regex'):
+            setattr(field, sk, sv)
+          else:
+            field.extra[sk] =  sv
       if v.get("required", False) or v.get("default", False) not in ('', False, None):
         field.default = v.get("default",...) #TODO default value removes the required attribute
         return dt, field
