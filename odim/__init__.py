@@ -1,6 +1,7 @@
 ''' ORM and ODM tool for FastApi simplification. It enables the user to define only 1 PyDantic models and work with
  data on multiple sources '''
 import inspect
+import asyncio
 from enum import Enum
 from typing import List, Optional, TypeVar, Union, Generic
 
@@ -58,14 +59,14 @@ class BaseOdimModel(BaseModel):
   def generic_validators_pre(cls, values):
     if hasattr(cls, "Config") and hasattr(cls.Config, "odim_hooks"):
       for fnc in cls.Config.odim_hooks.get("pre_validate",[]):
-        values = fnc(values)
+        values = awaited(fnc(values))
     return values
 
   @root_validator()
   def generic_validators_post(cls, values):
     if hasattr(cls, "Config") and hasattr(cls.Config, "odim_hooks"):
       for fnc in cls.Config.odim_hooks.get("post_validate",[]):
-        values = fnc(values)
+        values = awaited(fnc(values))
     return values
 
 
@@ -88,7 +89,16 @@ class BaseOdimModel(BaseModel):
     return await Odim(cls).get(*args, **kwargs)
 
 
+loop = None
 
+def awaited(o):
+  global loop
+  if not loop:
+    loop = asyncio.get_event_loop()
+  if inspect.iscoroutine(o):
+    return loop.run_until_complete(o)
+  else:
+    return o
 
 
 class Odim(object):
@@ -129,7 +139,7 @@ class Odim(object):
   def execute_hooks(self, hook_type, obj):
     if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks"):
       for fnc in self.model.Config.odim_hooks.get(hook_type,[]):
-        obj = fnc(obj)
+        obj = awaited(fnc(obj))
     return obj
 
 

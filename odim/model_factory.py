@@ -8,6 +8,7 @@ from decimal import Decimal
 from enum import Enum
 from os import path, getcwd
 from typing import Any, List, Optional, Type, Union
+from odim.basesignals import BaseSignals
 from pydantic import BaseModel, Field, create_model
 from odim.mongo import BaseMongoModel, ObjectId
 from datetime import datetime
@@ -170,11 +171,20 @@ class ModelFactory(object):
         spec = importlib.util.spec_from_file_location("odim.dynmodels.%s.signals" % class_name, signal_file)
         foo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(foo)
-        for n,x in inspect.getmembers(foo, inspect.isfunction):
-          if not "odim_hooks" in meta_attrs:
-            meta_attrs["odim_hooks"] = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
-          if n in meta_attrs["odim_hooks"].keys():
-            meta_attrs["odim_hooks"][n].append(x)
+        for n,x in inspect.getmembers(foo):
+          if inspect.isfunction(x):
+            if not "odim_hooks" in meta_attrs:
+              meta_attrs["odim_hooks"] = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
+            if n in meta_attrs["odim_hooks"].keys():
+              meta_attrs["odim_hooks"][n].append(x)
+          elif inspect.isclass(x) and issubclass(x, BaseSignals) and x!=BaseSignals:
+            for cfn,cfx in inspect.getmembers(x, predicate=inspect.ismethod):
+              if not getattr(cfx,'__isabstractmethod__',None):
+                if not "odim_hooks" in meta_attrs:
+                  meta_attrs["odim_hooks"] = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
+                if cfn in meta_attrs["odim_hooks"].keys():
+                  meta_attrs["odim_hooks"][n].append(cfx)
+
       setattr(m, 'Config', type('class', (), meta_attrs))
       m.__doc__ = description
       m.update_forward_refs()
