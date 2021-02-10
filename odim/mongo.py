@@ -105,11 +105,13 @@ class OdimMongo(Odim):
       dd["_id"] = BsonObjectId()
       softdel = {self.softdelete(): False} if self.softdelete() else {}
       ret = await mongo_client[collection].insert_one({**dd, **extend_query, **softdel})
+      update = False
     else:
       softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
       ret = await mongo_client[collection].replace_one({"_id" : self.instance.id, **softdel, **self.get_parsed_query(extend_query)}, dd)
       assert ret.modified_count > 0, "Not modified error"
-    dd = self.execute_hooks("post_save", dd)
+      update = True
+    dd = self.execute_hooks("post_save", dd, update=update)
     return self.instance.id
 
 
@@ -127,7 +129,7 @@ class OdimMongo(Odim):
     del dd["_id"]
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
     ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
-    dd = self.execute_hooks("post_save", dd)
+    dd = self.execute_hooks("post_save", dd, update=True)
     return ret
 
 

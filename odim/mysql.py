@@ -115,7 +115,7 @@ class OdimMysql(Odim):
       upff = self.get_field_pairs({**extend_query, **do})
       rsp = await execute_sql(db, "INSERT INTO %s SET %s" % (escape_string(table), upff), Op.execute)
       self.instance.id = rsp.lastrowid
-      do = self.execute_hooks("post_save", do)
+      do = self.execute_hooks("post_save", do, update=False)
       return rsp.lastrowid
     else:
       softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
@@ -123,7 +123,7 @@ class OdimMysql(Odim):
       whr = self.get_where({"id" : self.instance.id, **softdel, **extend_query})
       sql = "UPDATE %s SET %s WHERE %s" % (escape_string(table), upff, whr)
       rsp = await execute_sql(db, sql, Op.execute)
-      do = self.execute_hooks("post_save", do)
+      do = self.execute_hooks("post_save", do, update=True)
       return self.instance.id
 
 
@@ -138,7 +138,7 @@ class OdimMysql(Odim):
     whr = self.get_where({"id" :dd_id, **softdel, **extend_query})
     sql = "UPDATE %s SET %s WHERE %s" % (escape_string(table), upff, whr)
     rsp = await execute_sql(db, sql, Op.execute)
-    do = self.execute_hooks("post_save", do)
+    do = self.execute_hooks("post_save", dd, update=True)
 
 
   def get_where(self, query):

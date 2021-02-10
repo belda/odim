@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="odim", # Replace with your own username
-    version="0.1.10",
+    version="0.1.11",
     author="Belda",
     author_email="jakub.belescak@centrum.cz",
     description="Simple Python ORM/ODM specifically designed to be used with Pydantic and FastAPI ",
@@ -20,6 +20,7 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires = [
-        "pydantic"
+        "pydantic",
+        "nest_asyncio"
     ]
 )

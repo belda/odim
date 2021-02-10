@@ -1,9 +1,9 @@
 ''' ORM and ODM tool for FastApi simplification. It enables the user to define only 1 PyDantic models and work with
  data on multiple sources '''
 import inspect
-import asyncio
 from enum import Enum
 from typing import List, Optional, TypeVar, Union, Generic
+from odim.helper import awaited
 
 from pydantic import BaseModel, Field, root_validator
 from pydantic.generics import GenericModel
@@ -73,6 +73,9 @@ class BaseOdimModel(BaseModel):
   async def save(self, *args, **kwargs):
     return await Odim(self).save(*args, **kwargs)
 
+  async def update(self, *args, **kwargs):
+    return await Odim(self).update(*args, **kwargs)
+
   async def delete(self, force_harddelete = False):
     return await Odim(self).delete(force_harddelete = force_harddelete)
 
@@ -87,18 +90,6 @@ class BaseOdimModel(BaseModel):
   @classmethod
   async def get(cls, *args, **kwargs):
     return await Odim(cls).get(*args, **kwargs)
-
-
-loop = None
-
-def awaited(o):
-  global loop
-  if not loop:
-    loop = asyncio.get_event_loop()
-  if inspect.iscoroutine(o):
-    return loop.run_until_complete(o)
-  else:
-    return o
 
 
 class Odim(object):
@@ -136,10 +127,10 @@ class Odim(object):
     if hasattr(self.model, 'Config') and hasattr(self.model.Config, 'softdelete'):
       return getattr(self.model.Config,'softdelete')
 
-  def execute_hooks(self, hook_type, obj):
+  def execute_hooks(self, hook_type, obj, *args, **kwargs):
     if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks"):
       for fnc in self.model.Config.odim_hooks.get(hook_type,[]):
-        obj = awaited(fnc(obj))
+        obj = awaited(fnc(obj, *args, **kwargs))
     return obj
 
 

@@ -1,1 +1,2 @@
 pydantic
+nest_asyncio
