@@ -3,6 +3,8 @@ import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Union
+
+import bson
 from bson import ObjectId as BsonObjectId, decimal128
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
@@ -62,6 +64,21 @@ class BaseMongoModel(BaseOdimModel):
 all_json_encoders.update( BaseMongoModel.Config.json_encoders)
 
 
+def convert_decimal(dict_item):
+  # This function iterates a dictionary looking for types of Decimal and converts them to Decimal128
+  # Embedded dictionaries and lists are called recursively.
+  if dict_item is None: return None
+  for k, v in list(dict_item.items()):
+    if isinstance(v, dict):
+      convert_decimal(v)
+    elif isinstance(v, list):
+      for l in v:
+        convert_decimal(l)
+    elif isinstance(v, Decimal):
+      dict_item[k] = bson.Decimal128(str(v))
+  return dict_item
+
+
 class OdimMongo(Odim):
   protocols = ["mongo","mongodb"]
 
@@ -101,7 +118,7 @@ class OdimMongo(Odim):
       raise AttributeError("Can not save, instance not specified ")#describe more how ti instantiate
     collection = self.get_collection_name()
     iii = self.execute_hooks("pre_save", self.instance)
-    dd = iii.dict(by_alias=True)
+    dd = convert_decimal(iii.dict(by_alias=True))
 
     if not self.instance.id:
       dd["_id"] = BsonObjectId()
@@ -123,7 +140,7 @@ class OdimMongo(Odim):
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
     iii = self.execute_hooks("pre_save", self.instance)
-    dd = iii.dict(exclude_unset=True, by_alias=True)
+    dd = convert_decimal(iii.dict(exclude_unset=True, by_alias=True))
     if "_id" not in dd:
       raise AttributeError("Can not update document without _id")
     dd_id = dd["_id"]
