@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import bson
 from bson import ObjectId as BsonObjectId, decimal128
@@ -135,7 +135,7 @@ class OdimMongo(Odim):
     return self.instance.id
 
 
-  async def update(self, extend_query : dict= {}, include_deleted : bool = False):
+  async def update(self, extend_query : dict= {}, include_deleted : bool = False, only_fields : Optional[List['str']] = None):
     ''' Saves only the changed fields leaving other fields alone '''
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
@@ -147,6 +147,8 @@ class OdimMongo(Odim):
     if isinstance(dd_id, str):
       dd_id = ObjectId(dd_id)
     del dd["_id"]
+    if only_fields and len(only_fields)>0:
+      dd = dict([(key, val) for key, val in dd.items() if key in only_fields])
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
     ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
     dd = self.execute_hooks("post_save", dd, update=True)

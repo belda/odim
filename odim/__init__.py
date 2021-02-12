@@ -147,7 +147,7 @@ class Odim(object):
     raise NotImplementedError("Method not implemented for this connector")
 
 
-  async def update(self, extend_query : dict= {}, include_deleted : bool = False):
+  async def update(self, extend_query : dict= {}, include_deleted : bool = False, only_fields : Optional[List['str']] = None):
     ''' Saves only the changed fields leaving other fields alone '''
     raise NotImplementedError("Method not implemented for this connector")
 

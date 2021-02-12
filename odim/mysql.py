@@ -1,7 +1,7 @@
 import logging
 import re
 from enum import Enum
-from typing import Union
+from typing import List, Optional, Union
 
 import aiomysql.cursors
 from pydantic import BaseModel
@@ -127,12 +127,15 @@ class OdimMysql(Odim):
       return self.instance.id
 
 
-  async def update(self, extend_query : dict= {}, include_deleted : bool = False):
+  async def update(self, extend_query : dict= {}, include_deleted : bool = False, only_fields : Optional[List['str']] = None):
     ''' Updates just the partial document '''
     db, table = self.get_table_name()
     iii = self.execute_hooks("pre_save", self.instance)
     dd = iii.dict(exclude_unset=True, by_alias=True)
     dd_id = dd["id"]
+    del dd["id"]
+    if only_fields and len(only_fields)>0:
+      dd = dict([(key, val) for key, val in dd.items() if key in only_fields])
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
     upff = self.get_field_pairs(dd)
     whr = self.get_where({"id" :dd_id, **softdel, **extend_query})
