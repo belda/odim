@@ -1,8 +1,9 @@
 import logging
 import re
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional, Union
-from bson import ObjectId as BsonObjectId
+from bson import ObjectId as BsonObjectId, decimal128
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 import inspect
@@ -54,7 +55,8 @@ class BaseMongoModel(BaseOdimModel):
     json_encoders = {
       ObjectId: str,
       BsonObjectId: str,
-      datetime: lambda dt: dt.isoformat()
+      datetime: lambda dt: dt.isoformat(),
+      Decimal : float #im afraid im loosing precission here or we might output it as string?
     }
 
 all_json_encoders.update( BaseMongoModel.Config.json_encoders)
@@ -103,6 +105,7 @@ class OdimMongo(Odim):
 
     if not self.instance.id:
       dd["_id"] = BsonObjectId()
+      self.instance.id = dd["_id"]
       softdel = {self.softdelete(): False} if self.softdelete() else {}
       ret = await mongo_client[collection].insert_one({**dd, **extend_query, **softdel})
       update = False
