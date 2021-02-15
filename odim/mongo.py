@@ -65,18 +65,22 @@ all_json_encoders.update( BaseMongoModel.Config.json_encoders)
 
 
 def convert_decimal(dict_item):
-  # This function iterates a dictionary looking for types of Decimal and converts them to Decimal128
-  # Embedded dictionaries and lists are called recursively.
-  if dict_item is None: return None
-  for k, v in list(dict_item.items()):
-    if isinstance(v, dict):
-      convert_decimal(v)
-    elif isinstance(v, list):
-      for l in v:
-        convert_decimal(l)
-    elif isinstance(v, Decimal):
-      dict_item[k] = bson.Decimal128(str(v))
-  return dict_item
+  if dict_item is None:
+    return None
+  elif isinstance(dict_item, list):
+    l = []
+    for x in dict_item:
+      l.append(convert_decimal(x))
+    return l
+  elif isinstance(dict_item, dict):
+    nd = {}
+    for k, v in list(dict_item.items()):
+      nd[k] = convert_decimal(v)
+    return nd
+  elif isinstance(dict_item, Decimal):
+    return bson.Decimal128(str(dict_item))
+  else:
+    return dict_item
 
 
 class OdimMongo(Odim):
