@@ -13,7 +13,7 @@ import inspect
 from pymongo import ASCENDING, DESCENDING
 
 from odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, all_json_encoders
-from odim.helper import get_connection_info
+from odim.helper import get_asyncio_loop, get_connection_info
 
 log = logging.getLogger("uvicorn")
 
@@ -24,7 +24,7 @@ def get_mongo_client(alias):
   global client_connections
   if alias not in client_connections:
     cinf = get_connection_info(alias)
-    conn = AsyncIOMotorClient(cinf.url(withdb=False))
+    conn = AsyncIOMotorClient(cinf.url(withdb=False), io_loop=get_asyncio_loop())
     client_connections[alias] = conn[cinf.db]
   return client_connections[alias]
 
