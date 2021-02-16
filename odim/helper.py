@@ -108,12 +108,20 @@ def get_connection_info(db) -> ConnParams:
 import nest_asyncio
 
 
-def get_asyncio_loop():
+def get_asyncio_loop(which=False):
   ''' Tryies to get either the running loop, wrapped loop or create a loop '''
   try:
     loop = asyncio.get_running_loop()
-  except RuntimeError:  # no event loop running:
-    loop = asyncio.new_event_loop()
+    existed = True
+  except RuntimeError as e:  # no event loop running:
+    if str(e) == 'no running event loop':
+      loop = asyncio.new_event_loop()
+      nest_asyncio.apply(loop)
+      existed = False
+    else:
+      raise
+  if which:
+    return loop, existed
   return loop
 
 
@@ -124,15 +132,11 @@ def asyncio_run(future, as_task=True):
   :param future: A future or task or call of an async method.
   :param as_task: Forces the future to be scheduled as task (needed for e.g. aiohttp).
   """
-
-  try:
-    loop = asyncio.get_running_loop()
-  except RuntimeError:  # no event loop running:
-    loop = asyncio.new_event_loop()
-    return loop.run_until_complete(_to_task(future, as_task, loop))
-  else:
-    nest_asyncio.apply(loop)
+  loop, existed = get_asyncio_loop(True)
+  if existed:
     return asyncio.run(_to_task(future, as_task, loop))
+  else:
+    return loop.run_until_complete(_to_task(future, as_task, loop))
 
 
 def _to_task(future, as_task, loop):
@@ -143,6 +147,8 @@ def _to_task(future, as_task, loop):
 
 def awaited(o):
   while inspect.iscoroutine(o):
-    o = asyncio_run(o)
+    loop = get_asyncio_loop()
+    o = asyncio.run(o)
+    # o = asyncio_run(o, False)
   else:
     return o
