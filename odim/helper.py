@@ -105,7 +105,9 @@ def get_connection_info(db) -> ConnParams:
   return cp
 
 
+
 import nest_asyncio
+nest_asyncio.apply()
 
 
 def get_asyncio_loop(which=False):
@@ -148,7 +150,13 @@ def _to_task(future, as_task, loop):
 def awaited(o):
   while inspect.iscoroutine(o):
     loop = get_asyncio_loop()
-    o = asyncio.run(o)
+    try:
+      o = asyncio.run(o)
+    except RuntimeError as e:
+      # if "cannot be called from a running event loop" in str(e):
+        o = loop.run_until_complete(o)
+      # else:
+      #   raise
     # o = asyncio_run(o, False)
   else:
     return o
