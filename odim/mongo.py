@@ -126,16 +126,17 @@ class OdimMongo(Odim):
 
     if not self.instance.id:
       dd["_id"] = BsonObjectId()
+      iii = dd["_id"]
       self.instance.id = dd["_id"]
       softdel = {self.softdelete(): False} if self.softdelete() else {}
       ret = await mongo_client[collection].insert_one({**dd, **extend_query, **softdel})
-      update = False
+      created = True
     else:
       softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
       ret = await mongo_client[collection].replace_one({"_id" : self.instance.id, **softdel, **self.get_parsed_query(extend_query)}, dd)
       assert ret.modified_count > 0, "Not modified error"
-      update = True
-    dd = self.execute_hooks("post_save", dd, update=update)
+      created = False
+    iii = self.execute_hooks("post_save", iii, created=created)
     return self.instance.id
 
 
@@ -155,7 +156,7 @@ class OdimMongo(Odim):
       dd = dict([(key, val) for key, val in dd.items() if key in only_fields])
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
     ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
-    dd = self.execute_hooks("post_save", dd, update=True)
+    iii = self.execute_hooks("post_save", iii, created=False)
     return ret
 
 
@@ -231,6 +232,7 @@ class OdimMongo(Odim):
     else:
       d = obj.dict()
     d.update(self.get_parsed_query(extend_query))
+    softdelete = self.softdelete() and not force_harddelete
     if self.has_hooks("pre_remove","post_remove"):
       ret = await mongo_client[collection].find_one(d)
       if not ret:
@@ -238,11 +240,11 @@ class OdimMongo(Odim):
       ret = self.execute_hooks("pre_init", ret)
       x = self.model(**ret)
       x = self.execute_hooks("post_init", x)
-      x = self.execute_hooks("pre_remove", x)
-    if self.softdelete() and not force_harddelete:
+      x = self.execute_hooks("pre_remove", x, softdelete=softdelete)
+    if softdelete:
       rsp = await mongo_client[collection].find_one_and_update(d, {"$set" : {self.softdelete() : True}})
     else:
       rsp = await mongo_client[collection].delete_one(d)
-    if self.has_hooks("pre_remove","post_remove"):
-      self.execute_hooks("post_remove", x)
+    if self.has_hooks("post_remove"):
+      self.execute_hooks("post_remove", x, softdelete=softdelete)
     return rsp

@@ -5,40 +5,40 @@ class BaseSignals:
 
   @classmethod
   @abstractmethod
-  def pre_init(cls, doc):
+  def pre_init(cls, sender, doc, *args, **kwargs):
     raise NotImplementedError()
 
   @classmethod
   @abstractmethod
-  def post_init(cls,model):
+  def post_init(cls, sender, instance, *args, **kwargs):
     raise NotImplementedError()
 
   @classmethod
   @abstractmethod
-  def pre_save(cls, model):
+  def pre_save(cls, sender, instance, *args, **kwargs):
     raise NotImplementedError()
 
   @classmethod
   @abstractmethod
-  def post_save(cls, doc):
+  def post_save(cls, sender, instance, created, *args, **kwargs):
     raise NotImplementedError()
 
   @classmethod
   @abstractmethod
-  def pre_validate(cls, model):
+  def pre_validate(cls, sender, instance, *args, **kwargs):
     raise NotImplementedError()
 
   @classmethod
   @abstractmethod
-  def post_validate(cls,model):
+  def post_validate(cls, sender, instance, *args, **kwargs):
     raise NotImplementedError()
 
   @classmethod
   @abstractmethod
-  def pre_remove(cls, model):
+  def pre_remove(cls, sender, instance, softdelete, *args, **kwargs):
     raise NotImplementedError()
 
   @classmethod
   @abstractmethod
-  def post_remove(cls, model):
+  def post_remove(cls, sender, instance, softdelete,  *args, **kwargs):
     raise NotImplementedError()

@@ -115,7 +115,8 @@ class OdimMysql(Odim):
       upff = self.get_field_pairs({**extend_query, **do})
       rsp = await execute_sql(db, "INSERT INTO %s SET %s" % (escape_string(table), upff), Op.execute)
       self.instance.id = rsp.lastrowid
-      do = self.execute_hooks("post_save", do, update=False)
+      iii.id = self.instance.id
+      iii = self.execute_hooks("post_save", iii, created=True)
       return rsp.lastrowid
     else:
       softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
@@ -123,7 +124,7 @@ class OdimMysql(Odim):
       whr = self.get_where({"id" : self.instance.id, **softdel, **extend_query})
       sql = "UPDATE %s SET %s WHERE %s" % (escape_string(table), upff, whr)
       rsp = await execute_sql(db, sql, Op.execute)
-      do = self.execute_hooks("post_save", do, update=True)
+      iii = self.execute_hooks("post_save", iii, created=False)
       return self.instance.id
 
 
@@ -141,7 +142,7 @@ class OdimMysql(Odim):
     whr = self.get_where({"id" :dd_id, **softdel, **extend_query})
     sql = "UPDATE %s SET %s WHERE %s" % (escape_string(table), upff, whr)
     rsp = await execute_sql(db, sql, Op.execute)
-    do = self.execute_hooks("post_save", dd, update=True)
+    iii = self.execute_hooks("post_save", iii, created=False)
 
 
   def get_where(self, query):
@@ -217,12 +218,18 @@ class OdimMysql(Odim):
     ''' Delete the document from storage '''
     db, table = self.get_table_name()
     id = obj if not isinstance(obj, BaseModel) else obj.id
-    if self.softdelete() and not force_harddelete:
+    softdelete = self.softdelete() and not force_harddelete
+    if self.has_hooks("pre_remove","post_remove"):
+      x = await self.get(id)
+      x = self.execute_hooks("pre_remove", x, softdelete=softdelete)
+    if softdelete:
       whr = self.get_where({"id" : self.escape(id), **extend_query})
       await execute_sql(db, "UPDATE %s SET `%s`=true WHERE %s" % (escape_string(table), self.softdelete(), whr), Op.execute)
     else:
       whr = self.get_where({"id" : self.escape(id), **extend_query})
       await execute_sql(db, "DELETE FROM %s WHERE %s" % (escape_string(table), whr), Op.execute)
+    if self.has_hooks("post_remove"):
+      self.execute_hooks("post_remove", x, softdelete=softdelete)
     #TODO detect not found
 
 

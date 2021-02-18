@@ -1,8 +1,9 @@
 ''' ORM and ODM tool for FastApi simplification. It enables the user to define only 1 PyDantic models and work with
  data on multiple sources '''
+import enum
 import inspect
 from enum import Enum
-from typing import List, Optional, TypeVar, Union, Generic
+from typing import Any, List, Optional, TypeVar, Union, Generic
 from odim.helper import awaited
 
 from pydantic import BaseModel, Field, root_validator
@@ -91,6 +92,16 @@ class BaseOdimModel(BaseModel):
   async def get(cls, *args, **kwargs):
     return await Odim(cls).get(*args, **kwargs)
 
+  @classmethod
+  def add_hook(cls, hook_type, fnc):
+    if not hasattr(cls, "Config"):
+      setattr(cls, 'Config', type('class', (), {}))
+    if not hasattr(cls.Config, "odim_hooks"):
+      cls.Config.odim_hooks = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
+    k = hook_type.value if isinstance(hook_type, HookTypes) else hook_type
+    if fnc not in cls.Config.odim_hooks[k]:
+      cls.Config.odim_hooks[k].append(fnc)
+
 
 class Odim(object):
   ''' Initiates the wrapper to communicate with backends based on the pydantic model Config metaclass '''
@@ -130,7 +141,7 @@ class Odim(object):
   def execute_hooks(self, hook_type, obj, *args, **kwargs):
     if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks"):
       for fnc in self.model.Config.odim_hooks.get(hook_type,[]):
-        obj = awaited(fnc(obj, *args, **kwargs))
+        obj = awaited(fnc(self.model, obj, *args, **kwargs))
     return obj
 
 
@@ -195,3 +206,39 @@ class Odim(object):
 
 class NotFoundException(Exception):
   pass
+
+
+class HookTypes(enum.Enum):
+  pre_init = 'pre_init'
+  post_init = 'post_init'
+  pre_validate = 'pre_validate'
+  post_validate = 'post_validate'
+  pre_save = 'pre_save'
+  post_save = 'post_save'
+  pre_remove = 'pre_remove'
+  post_remove = 'post_remove'
+
+
+class hook(object):
+  ''' Decorator that connects function as a hook
+  :param hook_type: individual or list of signal types
+  :param sender: individual or list of Odim model classes to hook to
+
+  @hook([post_save,post_remove], [Class1,Class2])
+  def notify_user(sender, instance, *args, **kwargs):
+     ...
+  '''
+  def __init__(self, hook_type, sender, **kwargs):
+    self.hook_type = hook_type if isinstance(hook_type, (list, tuple)) else [ hook_type ]
+    self.sender = sender if isinstance(sender, (list, tuple)) else [ sender ]
+
+
+  def __call__(self, func):
+    self.func = func
+    for cls in self.sender:
+      for ht in self.hook_type:
+        cls.add_hook(ht, func)
+    decorator_self = self
+    return func
+
+
