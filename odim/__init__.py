@@ -98,9 +98,8 @@ class BaseOdimModel(BaseModel):
       setattr(cls, 'Config', type('class', (), {}))
     if not hasattr(cls.Config, "odim_hooks"):
       cls.Config.odim_hooks = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
-    k = hook_type.value if isinstance(hook_type, HookTypes) else hook_type
-    if fnc not in cls.Config.odim_hooks[k]:
-      cls.Config.odim_hooks[k].append(fnc)
+    if fnc not in cls.Config.odim_hooks[hook_type]:
+      cls.Config.odim_hooks[hook_type].append(fnc)
 
 
 class Odim(object):
@@ -206,17 +205,6 @@ class Odim(object):
 
 class NotFoundException(Exception):
   pass
-
-
-class HookTypes(enum.Enum):
-  pre_init = 'pre_init'
-  post_init = 'post_init'
-  pre_validate = 'pre_validate'
-  post_validate = 'post_validate'
-  pre_save = 'pre_save'
-  post_save = 'post_save'
-  pre_remove = 'pre_remove'
-  post_remove = 'post_remove'
 
 
 class hook(object):

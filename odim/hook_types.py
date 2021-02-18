@@ -1,0 +1,8 @@
+pre_init = 'pre_init'
+post_init = 'post_init'
+pre_validate = 'pre_validate'
+post_validate = 'post_validate'
+pre_save = 'pre_save'
+post_save = 'post_save'
+pre_remove = 'pre_remove'
+post_remove = 'post_remove'
