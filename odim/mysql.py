@@ -106,7 +106,7 @@ class OdimMysql(Odim):
   async def save(self, extend_query : dict= {}, include_deleted : bool = False):
     ''' Saves the document and returns its identifier '''
     db, table = self.get_table_name()
-    iii = self.execute_hooks("pre_save", self.instance)
+    iii = self.execute_hooks("pre_save", self.instance, created=(not self.instance.id))
     do = iii.dict(by_alias=True)
 
     if self.instance.id in (None, ""):
@@ -131,7 +131,7 @@ class OdimMysql(Odim):
   async def update(self, extend_query : dict= {}, include_deleted : bool = False, only_fields : Optional[List['str']] = None):
     ''' Updates just the partial document '''
     db, table = self.get_table_name()
-    iii = self.execute_hooks("pre_save", self.instance)
+    iii = self.execute_hooks("pre_save", self.instance, created=False)
     dd = iii.dict(exclude_unset=True, by_alias=True)
     dd_id = dd["id"]
     del dd["id"]

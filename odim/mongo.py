@@ -121,7 +121,7 @@ class OdimMongo(Odim):
     if not self.instance:
       raise AttributeError("Can not save, instance not specified ")#describe more how ti instantiate
     collection = self.get_collection_name()
-    iii = self.execute_hooks("pre_save", self.instance)
+    iii = self.execute_hooks("pre_save", self.instance, created=(not self.instance.id))
     dd = convert_decimal(iii.dict(by_alias=True))
 
     if not self.instance.id:
