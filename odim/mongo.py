@@ -126,7 +126,7 @@ class OdimMongo(Odim):
 
     if not self.instance.id:
       dd["_id"] = BsonObjectId()
-      iii = dd["_id"]
+      iii.id = dd["_id"]
       self.instance.id = dd["_id"]
       softdel = {self.softdelete(): False} if self.softdelete() else {}
       ret = await mongo_client[collection].insert_one({**dd, **extend_query, **softdel})
