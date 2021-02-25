@@ -1,13 +1,18 @@
 import inspect
 import json
 import random
+import re
 import string
 import importlib
 import sys
+from copy import deepcopy
 from decimal import Decimal
 from enum import Enum
 from os import path, getcwd
 from typing import Any, List, Optional, Type, Union
+
+from dynmodels import used_model_names
+from odim.helper import snake_case_to_camel_case
 from odim.basesignals import BaseSignals
 from pydantic import BaseModel, Field, create_model
 from odim.mongo import BaseMongoModel, ObjectId
@@ -56,6 +61,21 @@ DM_TYPE_MAPPING = {
 class SEnum(str, Enum):
   pass
 
+def get_available_class_name(name):
+  name = snake_case_to_camel_case(name)
+  name = name[0].capitalize() + name[1:]
+  if name in used_model_names:
+    if name[-1].isdigit():
+      g = re.match("^.*([\d]+)$", name).groups()[1]
+      n = int(g)+1
+      name = re.sub("^(.*)"+g+"$", str(n), name)
+    else:
+      name+= "2"
+
+  used_model_names[name] = name
+  return name
+
+
 def encode(k, v):
   if isinstance(v, list):
     if len(v) == 0:
@@ -72,7 +92,7 @@ def encode(k, v):
         subcls = {}
         for ks,vs in v.get("child", {}).items():
           subcls[ks] = encode(ks, vs)
-        m = create_model(__model_name=v.get("__title", k+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))).capitalize(), #TODO have a register for duplicate class names or use already made class
+        m = create_model(__model_name=get_available_class_name(v.get("__title", k)),
                          __module__ = "odim.dynmodels",
                          __base__=BaseModel,
                          **subcls)
@@ -84,7 +104,7 @@ def encode(k, v):
         for opt in v.get("options",[]):
           subcls[opt] = opt
 
-        m = SEnum(v.get("__title", k.capitalize()+"Enum"+(''.join(random.choices(string.ascii_uppercase + string.digits, k=6)))), subcls)
+        m = SEnum(  get_available_class_name(v.get("__title", k.capitalize()+"Enum")), subcls)
         if "__description" in v:
           m.__doc__ = v.get("__description")
         dt = m
@@ -128,7 +148,8 @@ class ModelFactory(object):
                        db_name=None, db_uri=None,
                        database=None, collection_name=None,
                        softdelete=None,
-                       file_uri=None, signal_file=None) -> Type[BaseMongoModel]:
+                       file_uri=None, signal_file=None,
+                       fields=[], exclude=[], extend={}) -> Type[BaseMongoModel]:
 
     assert db_name or db_uri, "Either database_name or database_uri must be specified"
     assert database and collection_name, "database and collection_name must be set"
@@ -145,18 +166,25 @@ class ModelFactory(object):
       data = json.loads(f.read())
       newcls = {}
       for k,v in data.items():
-        if k in ("__class_name","__title"):
-          if not class_name:
-            class_name = v
-        elif k in ("__description"):
-          if not description:
-            description = v
+        if len(fields)==0 or (len(fields)>0 and k in fields):
+          if k not in exclude:
+            if k in ("__class_name","__title"):
+              if not class_name:
+                class_name = v
+            elif k in ("__description"):
+              if not description:
+                description = v
+            else:
+              newcls[k] = encode(k, v)
+      for k,f in extend.items():
+        if isinstance(f, (str,dict)):
+          newcls[k] = encode(k,f)
         else:
-          newcls[k] = encode(k, v)
+          newcls[k] = f
 
       if not class_name:
         class_name = collection_name
-      m = create_model(class_name,
+      m = create_model(get_available_class_name(class_name),
                        __module__ = "odim.dynmodels",
                        __base__=BaseMongoModel,
                        **newcls)
@@ -254,6 +282,21 @@ class ModelFactory(object):
         print(f"  {k} : {dt} {rest}")
 
 
+  @classmethod
+  def clone(cls, model : BaseModel.__class__, name : Optional[str] = None, fields : List[str] = [], exclude : List[str] = [], extend : dict = {}):
+    class new_model(model):
+      pass
+    new_model.__name__ = get_available_class_name( name if name else model.__name__ )
+    oldfields = new_model.__fields__.keys()
+    if fields and len(fields)>0:
+      for name in oldfields:
+        if name not in fields:
+          del new_model.__fields__[name]
+    for name in exclude:
+      del new_model.__fields__[name]
+    for xname, xfield in extend:
+      setattr(new_model, xname, xfield)
+    return new_model
 
 
 if __name__ == "__main__":
