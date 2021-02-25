@@ -11,7 +11,6 @@ from enum import Enum
 from os import path, getcwd
 from typing import Any, List, Optional, Type, Union
 
-from dynmodels import used_model_names
 from odim.helper import snake_case_to_camel_case
 from odim.basesignals import BaseSignals
 from pydantic import BaseModel, Field, create_model
@@ -64,15 +63,14 @@ class SEnum(str, Enum):
 def get_available_class_name(name):
   name = snake_case_to_camel_case(name)
   name = name[0].capitalize() + name[1:]
-  if name in used_model_names:
+  while name in dynmodels.used_model_names:
     if name[-1].isdigit():
-      g = re.match("^.*([\d]+)$", name).groups()[1]
+      g = re.match("^.*([\d]+)$", name).groups()[0]
       n = int(g)+1
-      name = re.sub("^(.*)"+g+"$", str(n), name)
+      name = re.sub(g+"$", str(n), name)
     else:
       name+= "2"
-
-  used_model_names[name] = name
+  dynmodels.used_model_names[name] = name
   return name
 
 
@@ -283,7 +281,7 @@ class ModelFactory(object):
 
 
   @classmethod
-  def clone(cls, model : BaseModel.__class__, name : Optional[str] = None, fields : List[str] = [], exclude : List[str] = [], extend : dict = {}):
+  def clone(cls, model : BaseModel.__class__, name : Optional[str] = None, fields : List[str] = [], exclude : List[str] = [], extend : List = []):
     class new_model(model):
       pass
     new_model.__name__ = get_available_class_name( name if name else model.__name__ )
@@ -293,9 +291,11 @@ class ModelFactory(object):
         if name not in fields:
           del new_model.__fields__[name]
     for name in exclude:
-      del new_model.__fields__[name]
+      if name not in extend:
+        del new_model.__fields__[name]
     for xname, xfield in extend:
-      setattr(new_model, xname, xfield)
+      new_model.__fields__[xname] = xfield
+      new_model.__schema_cache__.clear()
     return new_model
 
 
