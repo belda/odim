@@ -101,6 +101,12 @@ class BaseOdimModel(BaseModel):
     if fnc not in cls.Config.odim_hooks[hook_type]:
       cls.Config.odim_hooks[hook_type].append(fnc)
 
+  def __str__(self):
+    if hasattr(self, 'id'):
+      return "%s<%s>" % (type(self).__name__, self.id)
+    else:
+      return "%s<???>" % type(self).__name__
+
 
 class Odim(object):
   ''' Initiates the wrapper to communicate with backends based on the pydantic model Config metaclass '''
