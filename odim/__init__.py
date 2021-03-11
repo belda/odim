@@ -107,6 +107,9 @@ class BaseOdimModel(BaseModel):
     else:
       return "%s<???>" % type(self).__name__
 
+  def __repr__(self):
+    return self.__str__()
+
 
 class Odim(object):
   ''' Initiates the wrapper to communicate with backends based on the pydantic model Config metaclass '''

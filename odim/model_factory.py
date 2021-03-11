@@ -285,7 +285,7 @@ class ModelFactory(object):
     class new_model(model):
       pass
     new_model.__name__ = get_available_class_name( name if name else model.__name__ )
-    oldfields = new_model.__fields__.keys()
+    oldfields = [ str(x) for x in new_model.__fields__.keys()]
     if fields and len(fields)>0:
       for name in oldfields:
         if name not in fields:
