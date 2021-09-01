@@ -60,14 +60,14 @@ class BaseOdimModel(BaseModel):
   def generic_validators_pre(cls, values):
     if hasattr(cls, "Config") and hasattr(cls.Config, "odim_hooks"):
       for fnc in cls.Config.odim_hooks.get("pre_validate",[]):
-        values = awaited(fnc(values))
+        values = awaited(fnc(cls, values))
     return values
 
   @root_validator()
   def generic_validators_post(cls, values):
     if hasattr(cls, "Config") and hasattr(cls.Config, "odim_hooks"):
       for fnc in cls.Config.odim_hooks.get("post_validate",[]):
-        values = awaited(fnc(values))
+        values = awaited(fnc(cls, values))
     return values
 
 
@@ -100,6 +100,15 @@ class BaseOdimModel(BaseModel):
       cls.Config.odim_hooks = {"pre_init":[], "post_init":[], "pre_save":[], "post_save":[],"pre_remove":[],"post_remove":[],"pre_validate":[],"post_validate":[]}
     if fnc not in cls.Config.odim_hooks[hook_type]:
       cls.Config.odim_hooks[hook_type].append(fnc)
+
+  def __str__(self):
+    if hasattr(self, 'id'):
+      return "%s<%s>" % (type(self).__name__, self.id)
+    else:
+      return "%s<???>" % type(self).__name__
+
+  def __repr__(self):
+    return self.__str__()
 
 
 class Odim(object):
@@ -140,7 +149,9 @@ class Odim(object):
   def execute_hooks(self, hook_type, obj, *args, **kwargs):
     if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks"):
       for fnc in self.model.Config.odim_hooks.get(hook_type,[]):
-        obj = awaited(fnc(self.model, obj, *args, **kwargs))
+        obj2 = awaited(fnc(self.model, obj, *args, **kwargs))
+        if obj2!=None:
+          obj = obj2
     return obj
 
 

@@ -126,7 +126,7 @@ class OdimMongo(Odim):
 
     if not self.instance.id:
       dd["_id"] = BsonObjectId()
-      iii = dd["_id"]
+      iii.id = dd["_id"]
       self.instance.id = dd["_id"]
       softdel = {self.softdelete(): False} if self.softdelete() else {}
       ret = await mongo_client[collection].insert_one({**dd, **extend_query, **softdel})
@@ -144,7 +144,7 @@ class OdimMongo(Odim):
     ''' Saves only the changed fields leaving other fields alone '''
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
-    iii = self.execute_hooks("pre_save", self.instance)
+    iii = self.execute_hooks("pre_save", self.instance, created=False)
     dd = convert_decimal(iii.dict(exclude_unset=True, by_alias=True))
     if "_id" not in dd:
       raise AttributeError("Can not update document without _id")

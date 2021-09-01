@@ -162,7 +162,7 @@ class OdimRouter(fastapi.APIRouter):
 @router.get("{path}{{id}}", response_model={model_name}{other})
 async def get_{model_name}(id : str):
   \'\'\' Returns the individual {model_name} details\'\'\'
-  return await Odim(TestTable).get(id=id)
+  return await Odim({model_name}).get(id=id)
 ''')
 
     if 'search' in add_methods:
