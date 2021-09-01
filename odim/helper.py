@@ -107,7 +107,6 @@ def get_connection_info(db) -> ConnParams:
 
 
 import nest_asyncio
-nest_asyncio.apply()
 
 
 def get_asyncio_loop(which=False):
