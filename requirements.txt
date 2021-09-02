@@ -1,2 +1,3 @@
+motor
 pydantic
 nest_asyncio

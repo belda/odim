@@ -5,10 +5,9 @@ from decimal import Decimal
 from typing import List, Optional, Union
 
 import bson
-from bson import ObjectId as BsonObjectId, decimal128
+from bson import ObjectId as BsonObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field
-import inspect
+from pydantic import Field
 
 from pymongo import ASCENDING, DESCENDING
 
@@ -24,7 +23,8 @@ def get_mongo_client(alias):
   global client_connections
   if alias not in client_connections:
     cinf = get_connection_info(alias)
-    conn = AsyncIOMotorClient(cinf.url(withdb=False), io_loop=get_asyncio_loop())
+    conn = AsyncIOMotorClient(
+        cinf.url(withdb=False), serverSelectionTimeoutMS=5000, io_loop=get_asyncio_loop())
     client_connections[alias] = conn[cinf.db]
   return client_connections[alias]
 
