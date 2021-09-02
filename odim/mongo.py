@@ -2,6 +2,7 @@ import logging
 import re
 from datetime import datetime
 from decimal import Decimal
+from time import sleep
 from typing import List, Optional, Union
 
 import bson
@@ -185,8 +186,7 @@ class OdimMongo(Odim):
           rsp["$and"] = [ {k : {"$exists" : True}}, {k: { "$ne" : None }} ]
     return rsp
 
-
-  async def find(self, query : dict, params : SearchParams = None, include_deleted : bool = False):
+  async def find(self, query: dict, params : SearchParams = None, include_deleted : bool = False, retries=0):
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
     if self.softdelete() and not include_deleted:
@@ -206,20 +206,35 @@ class OdimMongo(Odim):
     query = self.get_parsed_query(query)
     curs = mongo_client[collection].find(query, **find_params)
     rsplist = []
-    for x in await curs.to_list(None):
-      x2 = self.execute_hooks("pre_init", x)
-      m = self.model( **x2 )
-      rsplist.append( self.execute_hooks("post_init", m) )
-    return rsplist
+    try:
+      results = await curs.to_list(None)
+      for x in results:
+        x2 = self.execute_hooks("pre_init", x)
+        m = self.model( **x2 )
+        rsplist.append( self.execute_hooks("post_init", m) )
+      return rsplist
+    except Exception as e:
+      if retries > 5:
+            raise
+      log.warn('Mongo Query returned an error, retrying!')
+      sleep(.2)
+      return await self.find(query, params, include_deleted, retries=retries+1)
 
 
 
-  async def count(self, query : dict, include_deleted : bool = False):
+  async def count(self, query : dict, include_deleted : bool = False, retries=0):
     if self.softdelete() and not include_deleted:
       query = {self.softdelete(): False, **query}
     mongo_client = await self.get_mongo_client()
     collection = self.get_collection_name()
-    return await mongo_client[collection].count_documents(query)
+    try:
+      return await mongo_client[collection].count_documents(query)
+    except Exception as e:
+      if retries > 5:
+        raise
+      log.warn('Mongo Query returned an error, retrying!')
+      sleep(.2)
+      return await self.find(query, include_deleted, retries=retries+1)
 
 
   async def delete(self, obj : Union[str, ObjectId, BaseMongoModel], extend_query : dict= {}, force_harddelete : bool = False):
