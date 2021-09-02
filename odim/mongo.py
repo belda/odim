@@ -234,7 +234,7 @@ class OdimMongo(Odim):
         raise
       log.warn('Mongo Query returned an error, retrying!')
       sleep(.2)
-      return await self.find(query, include_deleted, retries=retries+1)
+      return await self.count(query, include_deleted, retries=retries+1)
 
 
   async def delete(self, obj : Union[str, ObjectId, BaseMongoModel], extend_query : dict= {}, force_harddelete : bool = False):
