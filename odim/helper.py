@@ -111,14 +111,10 @@ loop = asyncio.get_event_loop()
 if loop.is_closed():
   loop = asyncio.new_event_loop()
 
-
 def awaited(o):
-  print('awaited', o)
   if inspect.iscoroutine(o):
     return loop.run_until_complete(o)
-
   else:
-    print('execute (direct)', o)
     return o
 
 
