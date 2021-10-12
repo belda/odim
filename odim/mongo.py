@@ -207,10 +207,10 @@ class OdimMongo(Odim):
             find_params["sort"].append( (so, ASCENDING) )
     query = self.get_parsed_query(query)
     db = await self.mongo()
-    curs = db.find(query, **find_params)
+   
     rsplist = []
     try:
-      results = await curs.to_list(None)
+      results = db.find(query, **find_params)
       for x in results:
         x2 = self.execute_hooks("pre_init", x)
         m = self.model( **x2 )

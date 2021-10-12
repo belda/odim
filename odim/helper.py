@@ -115,7 +115,7 @@ def get_asyncio_loop(which=False):
   try:
     loop = asyncio.get_running_loop()
     existed = True
-  except RuntimeError as e:  # no event loop running:
+  except (TypeError, RuntimeError) as e:  # no event loop running:
     if str(e) == 'no running event loop':
       loop = asyncio.new_event_loop()
       nest_asyncio.apply(loop)
