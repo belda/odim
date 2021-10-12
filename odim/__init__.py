@@ -133,7 +133,7 @@ class Odim(object):
       self.model = model.__class__
       self.instance = model
 
-
+  @property
   def get_connection_identifier(self):
     if hasattr(self.model, 'Config'):
       if hasattr(self.model.Config, 'db_name'):

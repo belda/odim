@@ -67,7 +67,7 @@ class OdimMysql(Odim):
 
 
   def get_table_name(self):
-    ci = self.get_connection_identifier()
+    ci = self.get_connection_identifier
     if hasattr(self.model, 'Config'):
       if hasattr(self.model.Config, 'table_name'):
         cn = self.model.Config.table_name
