@@ -3,7 +3,7 @@ import inspect
 import os
 import re
 import urllib
-from typing import Optional, final
+from typing import Optional
 
 import pydantic
 
