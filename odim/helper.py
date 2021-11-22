@@ -113,7 +113,10 @@ if loop.is_closed():
 
 def awaited(o):
   if inspect.iscoroutine(o):
-    return loop.run_until_complete(o)
+    try:
+      return loop.run_until_complete(o)
+    except RuntimeError as e:
+      loop.create_task(o)
   else:
     return o
 
