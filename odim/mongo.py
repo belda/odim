@@ -15,7 +15,7 @@ from pymongo import MongoClient, errors
 from pymongo import ASCENDING, DESCENDING
 
 from odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, all_json_encoders
-from odim.helper import get_connection_info
+from odim.helper import awaited, get_connection_info
 
 log = logging.getLogger("uvicorn")
 
@@ -31,8 +31,8 @@ def async_wrap(func):
       return await loop.run_in_executor(executor, f)
   return run
 
-@async_wrap
-def get_mongo_client(alias):
+# @async_wrap
+async def get_mongo_client(alias):
   global client_connections
   if alias not in client_connections:
     cinf = get_connection_info(alias)
@@ -104,22 +104,46 @@ class OdimMongo(Odim):
     return self.model.__class__.__name__
 
 
-  async def mongo(self):
+  @property
+  async def __mongo(self):
+    # print('get mongo client', self.get_connection_identifier)
     client = await get_mongo_client(self.get_connection_identifier)
+    # print('got mongo client', client)
     return client[self.get_collection_name]
 
 
   async def get(self, id : Union[str, ObjectId], extend_query : dict= {}, include_deleted : bool = False):
+    # print('----')
     if isinstance(id, str):
       id = ObjectId(id)
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-    db = await self.mongo()
-    ret = db.find_one({"_id" : id, **softdel, **self.get_parsed_query(extend_query)})
+    # print('softdel', softdel)
+    
+    # print('get mongo')
+    db = await self.__mongo
+    # print('db: ', db)
+    # if not db:
+    #   print('did not get the DB')
+    #   sleep(0.5)
+    #   return await self.get(id, extend_query, include_deleted)
+
+    ext = self.get_parsed_query(extend_query)
+    # print('extended query', ext)
+    qry = {"_id" : id, **softdel, **ext}
+    # print('query')
+    # print(qry)
+    ret = db.find_one(qry)
+    # print('results')
+    # print(ret)
     if not ret:
       raise NotFoundException()
-    ret = self.execute_hooks("pre_init", ret)
+    ret = self.execute_hooks("pre_init", ret) # we send the DB Object into the PRE_INIT
+    print('pre_init', ret)
     x = self.model(**ret)
-    return self.execute_hooks("post_init", x)
+    print('model', x, ret)
+    x = self.execute_hooks("post_init", x) # we send the Model Obj into the POST_INIT
+    print('post_init', x)
+    return x
 
 
   async def save(self, extend_query : dict= {}, include_deleted : bool = False) -> ObjectId:
@@ -133,12 +157,12 @@ class OdimMongo(Odim):
       iii.id = dd["_id"]
       self.instance.id = dd["_id"]
       softdel = {self.softdelete(): False} if self.softdelete() else {}
-      db = await self.mongo()
+      db = await self.__mongo
       ret = db.insert_one({**dd, **extend_query, **softdel})
       created = True
     else:
       softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-      db = await self.mongo()
+      db = await self.__mongo
       ret = db.replace_one({"_id": self.instance.id, **softdel, **self.get_parsed_query(extend_query)}, dd)
       assert ret.modified_count > 0, "Not modified error"
       created = False
@@ -159,7 +183,7 @@ class OdimMongo(Odim):
     if only_fields and len(only_fields)>0:
       dd = dict([(key, val) for key, val in dd.items() if key in only_fields])
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-    db = await self.mongo()
+    db = await self.__mongo
     ret = db.find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
     iii = self.execute_hooks("post_save", iii, created=False)
     return ret
@@ -206,7 +230,7 @@ class OdimMongo(Odim):
           else:
             find_params["sort"].append( (so, ASCENDING) )
     query = self.get_parsed_query(query)
-    db = await self.mongo()
+    db = await self.__mongo
    
     rsplist = []
     try:
@@ -230,7 +254,7 @@ class OdimMongo(Odim):
       query = {self.softdelete(): False, **query}
 
     try:
-      db = await self.mongo()
+      db = await self.__mongo
       c = db.count_documents(query)
       return c
     except Exception as e:
@@ -250,7 +274,7 @@ class OdimMongo(Odim):
       d = obj.dict()
     d.update(self.get_parsed_query(extend_query))
     softdelete = self.softdelete() and not force_harddelete
-    db = await self.mongo()
+    db = await self.__mongo
     if self.has_hooks("pre_remove","post_remove"):
       ret = db.find_one(d)
       if not ret:
