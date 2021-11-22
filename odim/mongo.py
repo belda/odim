@@ -113,36 +113,20 @@ class OdimMongo(Odim):
 
 
   async def get(self, id : Union[str, ObjectId], extend_query : dict= {}, include_deleted : bool = False):
-    # print('----')
     if isinstance(id, str):
       id = ObjectId(id)
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-    # print('softdel', softdel)
     
-    # print('get mongo')
     db = await self.__mongo
-    # print('db: ', db)
-    # if not db:
-    #   print('did not get the DB')
-    #   sleep(0.5)
-    #   return await self.get(id, extend_query, include_deleted)
 
     ext = self.get_parsed_query(extend_query)
-    # print('extended query', ext)
     qry = {"_id" : id, **softdel, **ext}
-    # print('query')
-    # print(qry)
     ret = db.find_one(qry)
-    # print('results')
-    # print(ret)
     if not ret:
       raise NotFoundException()
     ret = self.execute_hooks("pre_init", ret) # we send the DB Object into the PRE_INIT
-    print('pre_init', ret)
     x = self.model(**ret)
-    print('model', x, ret)
     x = self.execute_hooks("post_init", x) # we send the Model Obj into the POST_INIT
-    print('post_init', x)
     return x
 
 
