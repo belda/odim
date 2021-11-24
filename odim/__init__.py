@@ -107,9 +107,9 @@ class BaseOdimModel(BaseModel):
 
   def __str__(self):
     if hasattr(self, 'id'):
-      return "%s<%s>" % (type(self).__name__, self.id)
+      return f"{type(self).__name__}<{self.id}>"
     else:
-      return "%s<???>" % type(self).__name__
+      return f"{type(self).__name__}<???>"
 
   def __repr__(self):
     return self.__str__()

@@ -194,7 +194,7 @@ class ModelFactory(object):
       if softdelete:
         meta_attrs["softdelete"] = softdelete
       if signal_file: # now handle the signals
-        spec = importlib.util.spec_from_file_location("odim.dynmodels.%s.signals" % class_name, signal_file)
+        spec = importlib.util.spec_from_file_location(f"odim.dynmodels.{class_name}.signals", signal_file)
         foo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(foo)
         for n,x in inspect.getmembers(foo):
