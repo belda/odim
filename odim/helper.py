@@ -109,6 +109,10 @@ def get_connection_info(db) -> ConnParams:
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
   
+try:
+  loop = asyncio.get_running_loop()
+except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+    loop = None
 loop = asyncio.get_event_loop()
 if loop.is_closed():
   loop = asyncio.new_event_loop()
@@ -117,14 +121,14 @@ asyncio.set_event_loop(loop)
 
 def awaited(o):
   if inspect.iscoroutine(o):
-    if (loop.is_running()):
+    if loop and loop.is_running():
       nest_asyncio.apply(loop)
       return asyncio.run(asyncio.ensure_future(o))
     try:
       return loop.run_until_complete(o)
     except RuntimeError as e:
-      nest_asyncio.apply()
-      return asyncio.run(asyncio.ensure_future(o))
+      loop.create_task(asyncio.ensure_future(o))
+      # return asyncio.run(asyncio.ensure_future(o))
   else:
     return o
 
