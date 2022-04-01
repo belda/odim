@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import os
 import re
+import threading
 import urllib
 from typing import Optional
 
@@ -119,6 +120,16 @@ if loop.is_closed():
   
 asyncio.set_event_loop(loop)
 
+class RunThread(threading.Thread):
+  def __init__(self, func, args, kwargs):
+    self.func = func
+    self.args = args
+    self.kwargs = kwargs
+    super().__init__()
+
+  def run(self):
+    self.result = asyncio.run(self.func(*self.args, **self.kwargs))
+      
 def awaited(o):
   if inspect.iscoroutine(o):
     if loop and loop.is_running():
@@ -127,10 +138,14 @@ def awaited(o):
     try:
       return loop.run_until_complete(o)
     except RuntimeError as e:
-      tsk = loop.create_task(o)
+      thread = RunThread(o)
+      thread.start()
+      thread.join()
+      return thread.result
+      # tsk = loop.create_task(o)
       # tsk.add_done_callback(
         # lambda t: print(f'Task done with result={t.result()}  << return val of main()'))
-      return tsk.result()
+      # return tsk.result()
       # return asyncio.run(asyncio.ensure_future(o))
   else:
     return o
