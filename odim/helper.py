@@ -143,7 +143,7 @@ def awaited(func, *args, **kwargs):
       thread.join()
       return thread.result
     else:
-      return asyncio.run(asyncio.ensure_future(o))
+      return asyncio.run(asyncio.ensure_future(func))
       
     # if loop and loop.is_running():
     #   nest_asyncio.apply(loop)
