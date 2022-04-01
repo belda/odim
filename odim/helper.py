@@ -121,6 +121,7 @@ if loop.is_closed():
 asyncio.set_event_loop(loop)
 
 class RunThread(threading.Thread):
+  result = None
   def __init__(self, func, args, kwargs):
     self.func = func
     self.args = args
