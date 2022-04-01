@@ -130,7 +130,7 @@ class RunThread(threading.Thread):
   def run(self):
     self.result = asyncio.run(self.func(*self.args, **self.kwargs))
       
-def awaited(o):
+def awaited(o, *args, **kwargs):
   if inspect.iscoroutine(o):
     if loop and loop.is_running():
       nest_asyncio.apply(loop)
@@ -138,7 +138,7 @@ def awaited(o):
     try:
       return loop.run_until_complete(o)
     except RuntimeError as e:
-      thread = RunThread(o)
+      thread = RunThread(o, args, kwargs)
       thread.start()
       thread.join()
       return thread.result
