@@ -107,13 +107,13 @@ def get_connection_info(db) -> ConnParams:
     cp.db = parsed.path[1:]
   return cp
 
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
   
 loop = asyncio.get_event_loop()
 if loop.is_closed():
   loop = asyncio.new_event_loop()
   
 asyncio.set_event_loop(loop)
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 def awaited(o):
   if inspect.iscoroutine(o):
