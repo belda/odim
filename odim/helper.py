@@ -8,6 +8,7 @@ from typing import Optional
 import pydantic
 
 import nest_asyncio
+import uvloop
 
 settings_module = None
 modsloaded = False
@@ -112,6 +113,7 @@ if loop.is_closed():
   loop = asyncio.new_event_loop()
   
 asyncio.set_event_loop(loop)
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 def awaited(o):
   if inspect.iscoroutine(o):
