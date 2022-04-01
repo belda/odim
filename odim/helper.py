@@ -123,7 +123,6 @@ def awaited(o):
     try:
       return loop.run_until_complete(o)
     except RuntimeError as e:
-      nest_asyncio.apply(loop)
       return asyncio.run(asyncio.ensure_future(o))
   else:
     return o
