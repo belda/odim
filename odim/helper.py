@@ -127,7 +127,10 @@ def awaited(o):
     try:
       return loop.run_until_complete(o)
     except RuntimeError as e:
-      loop.create_task(asyncio.ensure_future(o))
+      tsk = loop.create_task(asyncio.ensure_future(o))
+      # tsk.add_done_callback(
+        # lambda t: print(f'Task done with result={t.result()}  << return val of main()'))
+      return tsk.result()
       # return asyncio.run(asyncio.ensure_future(o))
   else:
     return o
