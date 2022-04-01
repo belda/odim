@@ -129,25 +129,37 @@ class RunThread(threading.Thread):
     super().__init__()
 
   def run(self):
-    self.result = asyncio.run(self.func(*self.args, **self.kwargs))
+    self.result = asyncio.run(asyncio.ensure_future(self.func(*self.args, **self.kwargs)))
       
-def awaited(o, *args, **kwargs):
-  if inspect.iscoroutine(o):
-    if loop and loop.is_running():
-      nest_asyncio.apply(loop)
-      return asyncio.run(asyncio.ensure_future(o))
+def awaited(func, *args, **kwargs):
+  if inspect.iscoroutine(func):
     try:
-      return loop.run_until_complete(o)
-    except RuntimeError as e:
-      thread = RunThread(o, args, kwargs)
+      loop = asyncio.get_running_loop()
+    except RuntimeError:
+      loop = None
+    if loop and loop.is_running():
+      thread = RunThread(func, args, kwargs)
       thread.start()
       thread.join()
       return thread.result
-      # tsk = loop.create_task(o)
-      # tsk.add_done_callback(
-        # lambda t: print(f'Task done with result={t.result()}  << return val of main()'))
-      # return tsk.result()
-      # return asyncio.run(asyncio.ensure_future(o))
+    else:
+      return asyncio.run(asyncio.ensure_future(o))
+      
+    # if loop and loop.is_running():
+    #   nest_asyncio.apply(loop)
+    #   return asyncio.run(asyncio.ensure_future(o))
+    # try:
+    #   return loop.run_until_complete(o)
+    # except RuntimeError as e:
+    #   thread = RunThread(o, args, kwargs)
+    #   thread.start()
+    #   thread.join()
+    #   return thread.result
+    #   # tsk = loop.create_task(o)
+    #   # tsk.add_done_callback(
+    #     # lambda t: print(f'Task done with result={t.result()}  << return val of main()'))
+    #   # return tsk.result()
+    #   # return asyncio.run(asyncio.ensure_future(o))
   else:
     return o
 
