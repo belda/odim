@@ -108,17 +108,17 @@ def get_connection_info(db) -> ConnParams:
     cp.db = parsed.path[1:]
   return cp
 
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+# asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
   
-try:
-  loop = asyncio.get_running_loop()
-except RuntimeError:  # 'RuntimeError: There is no current event loop...'
-    loop = None
-loop = asyncio.get_event_loop()
-if loop.is_closed():
-  loop = asyncio.new_event_loop()
+# try:
+#   loop = asyncio.get_running_loop()
+# except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+#     loop = None
+# loop = asyncio.get_event_loop()
+# if loop.is_closed():
+#   loop = asyncio.new_event_loop()
   
-asyncio.set_event_loop(loop)
+# asyncio.set_event_loop(loop)
 
 class RunThread(threading.Thread):
   result = None
@@ -127,24 +127,40 @@ class RunThread(threading.Thread):
     super().__init__()
 
   def run(self):
-    self.result = asyncio.run(asyncio.ensure_future(self.func))
+    try:
+      loop = asyncio.get_event_loop()
+    except RuntimeError as e:
+      loop = None
+    if (loop and loop.is_closed()) or not loop:
+      loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
+    if inspect.iscoroutine(self.func):
+      self.result = asyncio.run(self.func)
+    else:
+      self.result = asyncio.run(asyncio.ensure_future(self.func))
+    
       
 def awaited(func):
   if inspect.iscoroutine(func):
-    try:
-      loop = asyncio.get_running_loop()
-    except RuntimeError:
-      loop = None
-    if loop and loop.is_running():
-      thread = RunThread(func)
-      thread.start()
-      thread.join()
-      return thread.result
-    else:
-      loop = asyncio.new_event_loop()
-      asyncio.set_event_loop(loop)
-      # nest_asyncio.apply(loop)
-      return asyncio.run(func)
+    thread = RunThread(func)
+    thread.start()
+    thread.join()
+    return thread.result
+  
+    # try:
+    #   loop = asyncio.get_event_loop()
+    # except RuntimeError:
+    #   loop = None
+    # if loop and loop.is_running():
+    #   thread = RunThread(func)
+    #   thread.start()
+    #   thread.join()
+    #   return thread.result
+    # else:
+    #   loop = asyncio.new_event_loop()
+    #   asyncio.set_event_loop(loop)
+    #   # nest_asyncio.apply(loop)
+    #   return asyncio.run(func)
       
     # if loop and loop.is_running():
     #   nest_asyncio.apply(loop)
