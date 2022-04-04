@@ -122,23 +122,21 @@ asyncio.set_event_loop(loop)
 
 class RunThread(threading.Thread):
   result = None
-  def __init__(self, func, args, kwargs):
+  def __init__(self, func):
     self.func = func
-    self.args = args
-    self.kwargs = kwargs
     super().__init__()
 
   def run(self):
-    self.result = asyncio.run(asyncio.ensure_future(self.func(*self.args, **self.kwargs)))
+    self.result = asyncio.run(asyncio.ensure_future(self.func))
       
-def awaited(func, *args, **kwargs):
+def awaited(func):
   if inspect.iscoroutine(func):
     try:
       loop = asyncio.get_running_loop()
     except RuntimeError:
       loop = None
     if loop and loop.is_running():
-      thread = RunThread(func, args, kwargs)
+      thread = RunThread(func)
       thread.start()
       thread.join()
       return thread.result
