@@ -121,31 +121,43 @@ def get_connection_info(db) -> ConnParams:
 # asyncio.set_event_loop(loop)
 
 class RunThread(threading.Thread):
-  result = None
   def __init__(self, func):
     self.func = func
     super().__init__()
 
   def run(self):
     try:
-      loop = asyncio.get_event_loop()
+      loop = asyncio.get_event_loop() or asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
     except RuntimeError as e:
       loop = None
-    if (loop and loop.is_closed()) or not loop:
-      loop = asyncio.new_event_loop()
-      asyncio.set_event_loop(loop)
+    # if (loop and loop.is_closed()) or not loop:
+    #   loop = asyncio.new_event_loop()
+    #   asyncio.set_event_loop(loop)
+    print('loop', loop)
     if inspect.iscoroutine(self.func):
-      self.result = asyncio.run(self.func)
+      print('run until complete', self.func)
+      self.result = loop.run_until_complete(self.func)
     else:
+      print('asyncio.run', self.func)
       self.result = asyncio.run(asyncio.ensure_future(self.func))
     
       
 def awaited(func):
   if inspect.iscoroutine(func):
-    thread = RunThread(func)
-    thread.start()
-    thread.join()
-    return thread.result
+    loop = asyncio.get_event_loop() or asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop.run_until_complete(func)
+  else:
+    return func
+  
+  
+  
+    # thread = RunThread(func)
+    # print('thread', thread)
+    # thread.start()
+    # thread.join()
+    # return thread.result
   
     # try:
     #   loop = asyncio.get_event_loop()
@@ -177,8 +189,8 @@ def awaited(func):
     #     # lambda t: print(f'Task done with result={t.result()}  << return val of main()'))
     #   # return tsk.result()
     #   # return asyncio.run(asyncio.ensure_future(o))
-  else:
-    return func
+  # else:
+  #   return func
 
 
 def camel_case_to_snake_case(name):
