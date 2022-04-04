@@ -161,7 +161,7 @@ def awaited(func, *args, **kwargs):
     #   # return tsk.result()
     #   # return asyncio.run(asyncio.ensure_future(o))
   else:
-    return o
+    return func
 
 
 def camel_case_to_snake_case(name):
