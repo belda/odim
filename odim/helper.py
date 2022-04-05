@@ -5,11 +5,7 @@ import re
 import threading
 import urllib
 from typing import Optional
-
 import pydantic
-
-import nest_asyncio
-import uvloop
 
 settings_module = None
 modsloaded = False
@@ -108,89 +104,62 @@ def get_connection_info(db) -> ConnParams:
     cp.db = parsed.path[1:]
   return cp
 
-# asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-  
-# try:
-#   loop = asyncio.get_running_loop()
-# except RuntimeError:  # 'RuntimeError: There is no current event loop...'
-#     loop = None
-# loop = asyncio.get_event_loop()
-# if loop.is_closed():
-#   loop = asyncio.new_event_loop()
-  
-# asyncio.set_event_loop(loop)
-
 class RunThread(threading.Thread):
   def __init__(self, func):
     self.func = func
+    print(f'init new thread: {func.__name__}')
     super().__init__()
 
   def run(self):
+    print(f'run thread: {self.func.__name__}')
     try:
       loop = asyncio.get_event_loop() or asyncio.new_event_loop()
       asyncio.set_event_loop(loop)
     except RuntimeError as e:
       loop = None
-    # if (loop and loop.is_closed()) or not loop:
-    #   loop = asyncio.new_event_loop()
-    #   asyncio.set_event_loop(loop)
-    print('loop', loop)
+    print(f'loop = {loop}')
     if inspect.iscoroutine(self.func):
-      print('run until complete', self.func)
-      self.result = loop.run_until_complete(self.func)
+
+      if loop and loop.is_running():
+        print(f'---- run until complete: {self.func.__name__}')
+        self.result = loop.run_until_complete(self.func)
+      elif loop and not loop.is_running():
+        print('asyncio.run...')
+        self.result = asyncio.run(asyncio.ensure_future(self.func))
+      else:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        print(f'>>>> run until complete: {self.func.__name__}')
+        self.result = loop.run_until_complete(self.func)
+        # self.result = asyncio.run(asyncio.ensure_future(self.func))
     else:
-      print('asyncio.run', self.func)
-      self.result = asyncio.run(asyncio.ensure_future(self.func))
+      print(f'execute straight: {type(self.func)}, {self.func.__name__}')
+      self.result = self.func
     
       
 def awaited(func):
-  if inspect.iscoroutine(func):
-    loop = asyncio.get_event_loop() or asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    return loop.run_until_complete(func)
+  print(f'awaited:isfunction: {inspect.isfunction(func)} {func}')
+  print(f'awaited:iscoroutine: {inspect.iscoroutine(func)} {func}')
+  print(f'awaited:iscoroutinefunction: {inspect.iscoroutinefunction(func)} {func}')
+  if inspect.isfunction(func) or inspect.iscoroutine(func):
+    print(f'awaited: {type(func)} {func.__name__}')
+    thread = RunThread(func)
+    thread.start()
+    thread.join()
+    return thread.result
   else:
     return func
-  
-  
-  
-    # thread = RunThread(func)
-    # print('thread', thread)
-    # thread.start()
-    # thread.join()
-    # return thread.result
-  
-    # try:
-    #   loop = asyncio.get_event_loop()
-    # except RuntimeError:
-    #   loop = None
-    # if loop and loop.is_running():
-    #   thread = RunThread(func)
-    #   thread.start()
-    #   thread.join()
-    #   return thread.result
-    # else:
-    #   loop = asyncio.new_event_loop()
-    #   asyncio.set_event_loop(loop)
-    #   # nest_asyncio.apply(loop)
-    #   return asyncio.run(func)
-      
-    # if loop and loop.is_running():
-    #   nest_asyncio.apply(loop)
-    #   return asyncio.run(asyncio.ensure_future(o))
-    # try:
-    #   return loop.run_until_complete(o)
-    # except RuntimeError as e:
-    #   thread = RunThread(o, args, kwargs)
-    #   thread.start()
-    #   thread.join()
-    #   return thread.result
-    #   # tsk = loop.create_task(o)
-    #   # tsk.add_done_callback(
-    #     # lambda t: print(f'Task done with result={t.result()}  << return val of main()'))
-    #   # return tsk.result()
-    #   # return asyncio.run(asyncio.ensure_future(o))
-  # else:
-  #   return func
+
+# loop = asyncio.get_event_loop() or asyncio.new_event_loop()
+# asyncio.set_event_loop(loop)
+
+# def awaited(o):
+#   if inspect.iscoroutine(o):
+#     if (loop.is_running()):
+#       return asyncio.run(asyncio.ensure_future(o))
+#     return loop.run_until_complete(o)
+#   else:
+#     return o
 
 
 def camel_case_to_snake_case(name):
