@@ -130,6 +130,7 @@ class RunThread(threading.Thread):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         # print(f'>>>> run until complete: {self.func.__name__}')
+        
         self.result = loop.run_until_complete(self.func)
         # self.result = asyncio.run(asyncio.ensure_future(self.func))
     else:
@@ -143,10 +144,16 @@ def awaited(func):
   # print(f'awaited:iscoroutinefunction: {inspect.iscoroutinefunction(func)} {func}')
   if inspect.isfunction(func) or inspect.iscoroutine(func):
     # print(f'awaited: {type(func)} {func.__name__}')
-    thread = RunThread(func)
-    thread.start()
-    thread.join()
-    return thread.result
+    try:
+      thread = RunThread(func)
+      thread.start()
+      thread.join()
+      try:
+        return thread.result
+      except AttributeError:
+        return None
+    except AttributeError as e:
+      return None
   else:
     return func
 
