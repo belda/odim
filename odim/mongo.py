@@ -106,9 +106,7 @@ class OdimMongo(Odim):
 
   @property
   async def __mongo(self):
-    # print('get mongo client', self.get_connection_identifier)
     client = await get_mongo_client(self.get_connection_identifier)
-    # print('got mongo client', client)
     return client[self.get_collection_name]
 
 

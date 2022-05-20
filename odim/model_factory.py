@@ -248,7 +248,6 @@ class ModelFactory(object):
         out[propname]["default"] = vals["default"]
       if "description" in vals:
         out[propname]["description"] = vals["description"]
-    print(json.dumps(out, indent=4))
 
 
   @classmethod
@@ -262,8 +261,6 @@ class ModelFactory(object):
       filename = None
       data = json.loads(js_data)
 
-    if filename:
-      print(f"class {filename}(BaseMongoModel):")
     for k,v in data.items():
       if not isinstance(v, dict):
         print(f"  {k} : Optional[{MM_TYPE_MAPPING[v]}]")

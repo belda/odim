@@ -151,17 +151,11 @@ class Odim(object):
       return getattr(self.model.Config,'softdelete')
 
   def execute_hooks(self, hook_type, obj, *args, **kwargs):
-    # print('execute_hooks', hook_type, obj)
     if hasattr(self.model, "Config") and hasattr(self.model.Config, "odim_hooks"):
-      # print('got something')
       for fnc in self.model.Config.odim_hooks.get(hook_type,[]):
-        # print('func', fnc, obj)
         obj2 = awaited(fnc(self.model, obj, *args, **kwargs))
-        # print('obj2', obj2)
         if obj2!=None:
-          # print('revert obj')
           obj = obj2
-    # print('returning obj', obj)
     return obj
 
 

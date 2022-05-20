@@ -107,43 +107,32 @@ def get_connection_info(db) -> ConnParams:
 class RunThread(threading.Thread):
   def __init__(self, func):
     self.func = func
-    # print(f'init new thread: {func.__name__}')
     super().__init__()
 
   def run(self):
-    # print(f'run thread: {self.func.__name__}')
     try:
       loop = asyncio.get_event_loop() or asyncio.new_event_loop()
       asyncio.set_event_loop(loop)
     except RuntimeError as e:
       loop = None
-    # print(f'loop = {loop}')
     if inspect.iscoroutine(self.func):
 
       if loop and loop.is_running():
-        print(f'---- run until complete: {self.func.__name__}')
         self.result = loop.run_until_complete(self.func)
       elif loop and not loop.is_running():
-        # print('asyncio.run...')
         self.result = asyncio.run(asyncio.ensure_future(self.func))
       else:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        # print(f'>>>> run until complete: {self.func.__name__}')
         
         self.result = loop.run_until_complete(self.func)
         # self.result = asyncio.run(asyncio.ensure_future(self.func))
     else:
-      print(f'execute straight: {type(self.func)}, {self.func.__name__}')
       self.result = self.func
     
       
 def awaited(func):
-  # print(f'awaited:isfunction: {inspect.isfunction(func)} {func}')
-  # print(f'awaited:iscoroutine: {inspect.iscoroutine(func)} {func}')
-  # print(f'awaited:iscoroutinefunction: {inspect.iscoroutinefunction(func)} {func}')
   if inspect.isfunction(func) or inspect.iscoroutine(func):
-    # print(f'awaited: {type(func)} {func.__name__}')
     try:
       thread = RunThread(func)
       thread.start()
@@ -156,17 +145,6 @@ def awaited(func):
       return None
   else:
     return func
-
-# loop = asyncio.get_event_loop() or asyncio.new_event_loop()
-# asyncio.set_event_loop(loop)
-
-# def awaited(o):
-#   if inspect.iscoroutine(o):
-#     if (loop.is_running()):
-#       return asyncio.run(asyncio.ensure_future(o))
-#     return loop.run_until_complete(o)
-#   else:
-#     return o
 
 
 def camel_case_to_snake_case(name):
