@@ -6,12 +6,12 @@ from enum import Enum
 from typing import Any, List, Optional, TypeVar, Union, Generic
 
 from bson.objectid import ObjectId
-from odim.helper import awaited
+from libs.odim.odim.helper import awaited
 
 from pydantic import BaseModel, Field, root_validator
 from pydantic.generics import GenericModel
 from datetime import datetime
-from odim.helper import get_config, get_connection_info, get_connector_for_model
+from libs.odim.odim.helper import get_config, get_connection_info, get_connector_for_model
 
 
 all_json_encoders = {

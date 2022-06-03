@@ -14,8 +14,8 @@ from pymongo import MongoClient, errors
 
 from pymongo import ASCENDING, DESCENDING
 
-from odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, all_json_encoders
-from odim.helper import awaited, get_connection_info
+from libs.odim.odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, all_json_encoders
+from libs.odim.odim.helper import awaited, get_connection_info
 
 log = logging.getLogger("uvicorn")
 

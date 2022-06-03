@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, Union
 from pydantic import Field
 
-from odim.mongo import ObjectId
+from libs.odim.odim.mongo import ObjectId
 
 v= None
 

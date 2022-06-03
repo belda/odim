@@ -7,8 +7,8 @@ import fastapi
 from fastapi import Depends, params
 from pydantic import BaseModel, create_model
 
-from odim import Odim, OkResponse, SearchResponse
-from odim.dependencies import SearchParams
+from libs.odim.odim import Odim, OkResponse, SearchResponse
+from libs.odim.odim.dependencies import SearchParams
 
 class OdimRouter(fastapi.APIRouter):
   ''' Simplified FastAPI router for easy CRUD '''
