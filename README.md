@@ -36,7 +36,7 @@ await Odim(MyModel).count({"field" : 1})
 In case you are using amazin FastAPI. We have our extended router, that gives you CRUD API endpoint
 
 ```python3
-from libs.odim.odim.router import OdimRouter
+from odim.router import OdimRouter
 
 router = OdimRouter()
 

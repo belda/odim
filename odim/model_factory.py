@@ -11,12 +11,12 @@ from enum import Enum
 from os import path, getcwd
 from typing import Any, List, Optional, Type, Union
 
-from libs.odim.odim.helper import snake_case_to_camel_case
-from libs.odim.odim.basesignals import BaseSignals
+from odim.helper import snake_case_to_camel_case
+from odim.basesignals import BaseSignals
 from pydantic import BaseModel, Field, create_model
-from libs.odim.odim.mongo import BaseMongoModel, ObjectId
+from odim.mongo import BaseMongoModel, ObjectId
 from datetime import datetime
-from libs.odim.odim import dynmodels
+from odim import dynmodels
 
 def get_class_by_name(classname):
   ''' Returns the loaded instance of a class '''

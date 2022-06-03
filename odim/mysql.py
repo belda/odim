@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from pymysql import escape_string
 from pymysql.converters import escape_bytes_prefixed, escape_item
 
-from libs.odim.odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, get_connection_info
+from odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, get_connection_info
 
 log = logging.getLogger("uvicorn")
 pools = {}
