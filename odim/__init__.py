@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any, List, Optional, TypeVar, Union, Generic
 
 from bson.objectid import ObjectId
+from pymysql import Timestamp
 from odim.helper import awaited
 
 from pydantic import BaseModel, Field, root_validator
@@ -27,11 +28,15 @@ class SearchParams(BaseModel):
   limit : int = 25
   sort : Optional[str] = Field(default=None, description="Order by field list, separated by comma with - signifying descending order. e.g. name,-created_at  will order by name ASC and created_at DESC", regex="[,a-zA-Z0-9_-]*")
 
+class CachedTimestamps(GenericModel, Generic[T]):
+  set : Timestamp = Field(description="Time when the results were cached")
+  expires : Timestamp = Field(description="Time when the results will expire")
 
 class SearchResponse(GenericModel, Generic[T]):
   search : dict = Field(description="The search data that was performed")
   total : int =  Field(description="The total number of results")
   results : List[T]
+  cached : Optional[CachedTimestamps] = Field(description="Optional information if the results were cached.", default=False)
 
   class Config:
     json_encoders = all_json_encoders
