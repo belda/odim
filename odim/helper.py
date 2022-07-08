@@ -2,10 +2,9 @@ import asyncio
 import inspect
 import os
 import re
+import threading
 import urllib
-from asyncio import Task
 from typing import Optional
-
 import pydantic
 
 settings_module = None
@@ -105,62 +104,47 @@ def get_connection_info(db) -> ConnParams:
     cp.db = parsed.path[1:]
   return cp
 
+class RunThread(threading.Thread):
+  def __init__(self, func):
+    self.func = func
+    super().__init__()
 
-
-import nest_asyncio
-nest_asyncio.apply()
-
-
-def get_asyncio_loop(which=False):
-  ''' Tryies to get either the running loop, wrapped loop or create a loop '''
-  try:
-    loop = asyncio.get_running_loop()
-    existed = True
-  except RuntimeError as e:  # no event loop running:
-    if str(e) == 'no running event loop':
-      loop = asyncio.new_event_loop()
-      nest_asyncio.apply(loop)
-      existed = False
-    else:
-      raise
-  if which:
-    return loop, existed
-  return loop
-
-
-def asyncio_run(future, as_task=True):
-  """
-  A better implementation of `asyncio.run`.
-
-  :param future: A future or task or call of an async method.
-  :param as_task: Forces the future to be scheduled as task (needed for e.g. aiohttp).
-  """
-  loop, existed = get_asyncio_loop(True)
-  if existed:
-    return asyncio.run(_to_task(future, as_task, loop))
-  else:
-    return loop.run_until_complete(_to_task(future, as_task, loop))
-
-
-def _to_task(future, as_task, loop):
-  if not as_task or isinstance(future, Task):
-    return future
-  return loop.create_task(future)
-
-
-def awaited(o):
-  while inspect.iscoroutine(o):
-    loop = get_asyncio_loop()
+  def run(self):
     try:
-      o = asyncio.run(o)
+      loop = asyncio.get_event_loop() or asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
     except RuntimeError as e:
-      # if "cannot be called from a running event loop" in str(e):
-        o = loop.run_until_complete(o)
-      # else:
-      #   raise
-    # o = asyncio_run(o, False)
+      loop = None
+    if inspect.iscoroutine(self.func):
+
+      if loop and loop.is_running():
+        self.result = loop.run_until_complete(self.func)
+      elif loop and not loop.is_running():
+        self.result = asyncio.run(asyncio.ensure_future(self.func))
+      else:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        self.result = loop.run_until_complete(self.func)
+        # self.result = asyncio.run(asyncio.ensure_future(self.func))
+    else:
+      self.result = self.func
+    
+      
+def awaited(func):
+  if inspect.isfunction(func) or inspect.iscoroutine(func):
+    try:
+      thread = RunThread(func)
+      thread.start()
+      thread.join()
+      try:
+        return thread.result
+      except AttributeError:
+        return None
+    except AttributeError as e:
+      return None
   else:
-    return o
+    return func
 
 
 def camel_case_to_snake_case(name):

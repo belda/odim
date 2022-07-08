@@ -2,32 +2,42 @@ import logging
 import re
 from datetime import datetime
 from decimal import Decimal
+from time import sleep
 from typing import List, Optional, Union
 
 import bson
-from bson import ObjectId as BsonObjectId, decimal128
-from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field
-import inspect
+from bson import ObjectId as BsonObjectId
+from pydantic import Field
+from functools import wraps, partial
+import asyncio
+from pymongo import MongoClient, errors
 
 from pymongo import ASCENDING, DESCENDING
 
 from odim import BaseOdimModel, NotFoundException, Odim, Operation, SearchParams, all_json_encoders
-from odim.helper import get_asyncio_loop, get_connection_info
+from odim.helper import awaited, get_connection_info
 
 log = logging.getLogger("uvicorn")
 
 client_connections = {}
 
 
-def get_mongo_client(alias):
+def async_wrap(func):
+  @wraps(func)
+  async def run(*args, loop=None, executor=None, **kwargs):
+      if loop is None:
+          loop = asyncio.get_event_loop()
+      f = partial(func, *args, **kwargs)
+      return await loop.run_in_executor(executor, f)
+  return run
+
+# @async_wrap
+async def get_mongo_client(alias):
   global client_connections
   if alias not in client_connections:
     cinf = get_connection_info(alias)
-    conn = AsyncIOMotorClient(cinf.url(withdb=False), io_loop=get_asyncio_loop())
-    client_connections[alias] = conn[cinf.db]
+    client_connections[alias] = MongoClient(cinf.url(withdb=False), cinf.port)[cinf.db]
   return client_connections[alias]
-
 
 class ObjectId(BsonObjectId):
 
@@ -44,7 +54,6 @@ class ObjectId(BsonObjectId):
     @classmethod
     def __modify_schema__(cls, field_schema):
         field_schema.update(type='string')
-
 
 
 class BaseMongoModel(BaseOdimModel):
@@ -86,6 +95,7 @@ def convert_decimal(dict_item):
 class OdimMongo(Odim):
   protocols = ["mongo","mongodb"]
 
+  @property
   def get_collection_name(self):
     if hasattr(self.model, 'Config'):
       if hasattr(self.model.Config, 'collection_name'):
@@ -94,33 +104,33 @@ class OdimMongo(Odim):
     return self.model.__class__.__name__
 
 
-  async def get_mongo_client(self):
-    return get_mongo_client(self.get_connection_identifier())
-
-
-  def mongo(self):
-    return self.get_mongo_client()[self.get_collection_name()]
+  @property
+  async def __mongo(self):
+    client = await get_mongo_client(self.get_connection_identifier)
+    return client[self.get_collection_name]
 
 
   async def get(self, id : Union[str, ObjectId], extend_query : dict= {}, include_deleted : bool = False):
     if isinstance(id, str):
       id = ObjectId(id)
-    mongo_client = await self.get_mongo_client()
-    collection = self.get_collection_name()
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-    ret = await mongo_client[collection].find_one({"_id" : id, **softdel, **self.get_parsed_query(extend_query)})
+    
+    db = await self.__mongo
+
+    ext = self.get_parsed_query(extend_query)
+    qry = {"_id" : id, **softdel, **ext}
+    ret = db.find_one(qry)
     if not ret:
       raise NotFoundException()
-    ret = self.execute_hooks("pre_init", ret)
+    ret = self.execute_hooks("pre_init", ret) # we send the DB Object into the PRE_INIT
     x = self.model(**ret)
-    return self.execute_hooks("post_init", x)
+    x = self.execute_hooks("post_init", x) # we send the Model Obj into the POST_INIT
+    return x
 
 
   async def save(self, extend_query : dict= {}, include_deleted : bool = False) -> ObjectId:
-    mongo_client = await self.get_mongo_client()
     if not self.instance:
       raise AttributeError("Can not save, instance not specified ")#describe more how ti instantiate
-    collection = self.get_collection_name()
     iii = self.execute_hooks("pre_save", self.instance, created=(not self.instance.id))
     dd = convert_decimal(iii.dict(by_alias=True))
 
@@ -129,11 +139,13 @@ class OdimMongo(Odim):
       iii.id = dd["_id"]
       self.instance.id = dd["_id"]
       softdel = {self.softdelete(): False} if self.softdelete() else {}
-      ret = await mongo_client[collection].insert_one({**dd, **extend_query, **softdel})
+      db = await self.__mongo
+      ret = db.insert_one({**dd, **extend_query, **softdel})
       created = True
     else:
       softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-      ret = await mongo_client[collection].replace_one({"_id" : self.instance.id, **softdel, **self.get_parsed_query(extend_query)}, dd)
+      db = await self.__mongo
+      ret = db.replace_one({"_id": self.instance.id, **softdel, **self.get_parsed_query(extend_query)}, dd)
       assert ret.modified_count > 0, "Not modified error"
       created = False
     iii = self.execute_hooks("post_save", iii, created=created)
@@ -142,8 +154,6 @@ class OdimMongo(Odim):
 
   async def update(self, extend_query : dict= {}, include_deleted : bool = False, only_fields : Optional[List['str']] = None):
     ''' Saves only the changed fields leaving other fields alone '''
-    mongo_client = await self.get_mongo_client()
-    collection = self.get_collection_name()
     iii = self.execute_hooks("pre_save", self.instance, created=False)
     dd = convert_decimal(iii.dict(exclude_unset=True, by_alias=True))
     if "_id" not in dd:
@@ -155,7 +165,8 @@ class OdimMongo(Odim):
     if only_fields and len(only_fields)>0:
       dd = dict([(key, val) for key, val in dd.items() if key in only_fields])
     softdel = {self.softdelete(): False} if self.softdelete() and not include_deleted else {}
-    ret = await mongo_client[collection].find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
+    db = await self.__mongo
+    ret = db.find_one_and_update({"_id" : dd_id, **softdel, **self.get_parsed_query(extend_query)}, {"$set" : dd})
     iii = self.execute_hooks("post_save", iii, created=False)
     return ret
 
@@ -185,10 +196,7 @@ class OdimMongo(Odim):
           rsp["$and"] = [ {k : {"$exists" : True}}, {k: { "$ne" : None }} ]
     return rsp
 
-
-  async def find(self, query : dict, params : SearchParams = None, include_deleted : bool = False):
-    mongo_client = await self.get_mongo_client()
-    collection = self.get_collection_name()
+  async def find(self, query: dict, params : SearchParams = None, include_deleted : bool = False, retries=0):
     if self.softdelete() and not include_deleted:
       query = {self.softdelete(): False, **query}
     #TODO use projection on model to limit to only desired fields
@@ -204,27 +212,42 @@ class OdimMongo(Odim):
           else:
             find_params["sort"].append( (so, ASCENDING) )
     query = self.get_parsed_query(query)
-    curs = mongo_client[collection].find(query, **find_params)
+    db = await self.__mongo
+   
     rsplist = []
-    for x in await curs.to_list(None):
-      x2 = self.execute_hooks("pre_init", x)
-      m = self.model( **x2 )
-      rsplist.append( self.execute_hooks("post_init", m) )
-    return rsplist
+    try:
+      results = db.find(query, **find_params)
+      for x in results:
+        x2 = self.execute_hooks("pre_init", x)
+        m = self.model( **x2 )
+        rsplist.append( self.execute_hooks("post_init", m) )
+      return rsplist
+    except Exception as e:
+      if retries > 5:
+            raise
+      log.warn(f'Mongo Query returned an error, retrying find({query})! {e}')
+      sleep(.2)
+      return await self.find(query, params, include_deleted, retries=retries+1)
 
 
 
-  async def count(self, query : dict, include_deleted : bool = False):
+  async def count(self, query : dict, include_deleted : bool = False, retries=0):
     if self.softdelete() and not include_deleted:
       query = {self.softdelete(): False, **query}
-    mongo_client = await self.get_mongo_client()
-    collection = self.get_collection_name()
-    return await mongo_client[collection].count_documents(query)
+
+    try:
+      db = await self.__mongo
+      c = db.count_documents(query)
+      return c
+    except Exception as e:
+      if retries > 5:
+        raise
+      log.warn(f'Mongo Query returned an error, retrying count({query})! {e}')
+      sleep(.2)
+      return await self.count(query, include_deleted, retries=retries+1)
 
 
   async def delete(self, obj : Union[str, ObjectId, BaseMongoModel], extend_query : dict= {}, force_harddelete : bool = False):
-    mongo_client = await self.get_mongo_client()
-    collection = self.get_collection_name()
     if isinstance(obj, str):
       d = {"_id" : ObjectId(obj)}
     elif isinstance(obj, ObjectId):
@@ -233,8 +256,9 @@ class OdimMongo(Odim):
       d = obj.dict()
     d.update(self.get_parsed_query(extend_query))
     softdelete = self.softdelete() and not force_harddelete
+    db = await self.__mongo
     if self.has_hooks("pre_remove","post_remove"):
-      ret = await mongo_client[collection].find_one(d)
+      ret = db.find_one(d)
       if not ret:
         raise NotFoundException()
       ret = self.execute_hooks("pre_init", ret)
@@ -242,9 +266,9 @@ class OdimMongo(Odim):
       x = self.execute_hooks("post_init", x)
       x = self.execute_hooks("pre_remove", x, softdelete=softdelete)
     if softdelete:
-      rsp = await mongo_client[collection].find_one_and_update(d, {"$set" : {self.softdelete() : True}})
+      rsp = db.find_one_and_update(d, {"$set": {self.softdelete(): True}})
     else:
-      rsp = await mongo_client[collection].delete_one(d)
+      rsp = db.delete_one(d)
     if self.has_hooks("post_remove"):
       self.execute_hooks("post_remove", x, softdelete=softdelete)
     return rsp

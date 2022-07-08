@@ -4,6 +4,9 @@ import enum
 import inspect
 from enum import Enum
 from typing import Any, List, Optional, TypeVar, Union, Generic
+
+from bson.objectid import ObjectId
+from pymysql import Timestamp
 from odim.helper import awaited
 
 from pydantic import BaseModel, Field, root_validator
@@ -11,8 +14,10 @@ from pydantic.generics import GenericModel
 from datetime import datetime
 from odim.helper import get_config, get_connection_info, get_connector_for_model
 
+
 all_json_encoders = {
-  datetime: lambda dt: dt.isoformat()
+  datetime: lambda dt: dt.isoformat(),
+  ObjectId: lambda o: str(o)
 }
 
 T = TypeVar('T')
@@ -23,11 +28,15 @@ class SearchParams(BaseModel):
   limit : int = 25
   sort : Optional[str] = Field(default=None, description="Order by field list, separated by comma with - signifying descending order. e.g. name,-created_at  will order by name ASC and created_at DESC", regex="[,a-zA-Z0-9_-]*")
 
+class CachedTimestamps(GenericModel, Generic[T]):
+  set : Timestamp = Field(description="Time when the results were cached")
+  expires : Timestamp = Field(description="Time when the results will expire")
 
 class SearchResponse(GenericModel, Generic[T]):
   search : dict = Field(description="The search data that was performed")
   total : int =  Field(description="The total number of results")
   results : List[T]
+  cached : Optional[CachedTimestamps] = Field(description="Optional information if the results were cached.", default=False)
 
   class Config:
     json_encoders = all_json_encoders
@@ -103,9 +112,9 @@ class BaseOdimModel(BaseModel):
 
   def __str__(self):
     if hasattr(self, 'id'):
-      return "%s<%s>" % (type(self).__name__, self.id)
+      return f"{type(self).__name__}<{self.id}>"
     else:
-      return "%s<???>" % type(self).__name__
+      return f"{type(self).__name__}<???>"
 
   def __repr__(self):
     return self.__str__()
@@ -129,7 +138,7 @@ class Odim(object):
       self.model = model.__class__
       self.instance = model
 
-
+  @property
   def get_connection_identifier(self):
     if hasattr(self.model, 'Config'):
       if hasattr(self.model.Config, 'db_name'):
